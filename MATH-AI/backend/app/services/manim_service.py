@@ -2,8 +2,6 @@ import ast
 import math
 import os
 import subprocess
-import tempfile
-import threading
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -24,24 +22,6 @@ class ManimService:
             "high": ["-qh"],
         }
         self.quality = os.getenv("VIDEO_QUALITY", "medium")
-
-        background_music_dir = os.getenv("BACKGROUND_MUSIC_DIR")
-        default_audio_dir = Path(__file__).parent.parent / "assets" / "audio"
-        self.audio_dir = (
-            Path(background_music_dir) if background_music_dir else default_audio_dir
-        )
-        self.audio_tracks = (
-            sorted(self.audio_dir.glob("*.mp3")) if self.audio_dir.exists() else []
-        )
-        self._audio_index = 0
-        self._audio_lock = threading.Lock()
-        self.background_music_enabled = (
-            os.getenv("ENABLE_BACKGROUND_MUSIC", "true").lower() != "false"
-        )
-        try:
-            self.music_volume = float(os.getenv("BACKGROUND_MUSIC_VOLUME", "0.2"))
-        except ValueError:
-            self.music_volume = 0.2
 
     def render_animation(
         self,
@@ -126,15 +106,6 @@ class ManimService:
                     "stderr": result.stderr,
                 }
 
-            background_track = None
-            background_music_error = None
-            music_result = self._apply_background_music(video_path)
-            if music_result.get("success"):
-                video_path = Path(music_result["video_path"])
-                background_track = music_result.get("track")
-            else:
-                background_music_error = music_result.get("error")
-
             video_url = f"/videos/{video_path.name}"
 
             return {
@@ -143,8 +114,6 @@ class ManimService:
                 "video_url": video_url,
                 "session_id": session_id,
                 "script_path": str(script_path),
-                "background_track": background_track,
-                "background_music_error": background_music_error,
                 "message": "Animation rendered successfully",
             }
 
@@ -417,124 +386,6 @@ class ManimService:
             return video_files[0]
 
         return None
-
-    def _get_next_audio_track(self) -> Optional[Path]:
-        if not self.background_music_enabled or not self.audio_tracks:
-            return None
-        with self._audio_lock:
-            if not self.audio_tracks:
-                return None
-            track = self.audio_tracks[self._audio_index]
-            self._audio_index = (self._audio_index + 1) % len(self.audio_tracks)
-        return track
-
-    def _apply_background_music(self, video_path: Path) -> dict:
-        track = self._get_next_audio_track()
-        if not track:
-            return {
-                "success": False,
-                "video_path": str(video_path),
-                "error": "Background music disabled or unavailable",
-            }
-
-        temp_file = tempfile.NamedTemporaryFile(
-            delete=False, suffix=video_path.suffix, dir=str(video_path.parent)
-        )
-        temp_output = Path(temp_file.name)
-        temp_file.close()
-
-        video_duration = self._get_media_duration(video_path)
-        if video_duration is None or video_duration <= 0:
-            if temp_output.exists():
-                try:
-                    temp_output.unlink()
-                except OSError:
-                    pass
-            return {"success": False, "video_path": str(video_path)}
-
-        filter_complex = (
-            f"[1:a]aloop=loop=-1:size=0:start=0,atrim=0:{video_duration:.3f},"
-            f"asetpts=PTS-STARTPTS,volume={self.music_volume}[bgm]"
-        )
-
-        try:
-            cmd = [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(video_path),
-                "-i",
-                str(track),
-                "-filter_complex",
-                filter_complex,
-                "-map",
-                "0:v",
-                "-map",
-                "[bgm]",
-                "-c:v",
-                "copy",
-                "-c:a",
-                "aac",
-                "-shortest",
-                str(temp_output),
-            ]
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-            os.replace(temp_output, video_path)
-            return {
-                "success": True,
-                "video_path": str(video_path),
-                "track": str(track),
-            }
-        except subprocess.CalledProcessError as e:
-            if temp_output.exists():
-                try:
-                    temp_output.unlink()
-                except OSError:
-                    pass
-            return {
-                "success": False,
-                "error": e.stderr or e.stdout,
-                "video_path": str(video_path),
-            }
-        except Exception as e:
-            if temp_output.exists():
-                try:
-                    temp_output.unlink()
-                except OSError:
-                    pass
-            return {"success": False, "error": str(e), "video_path": str(video_path)}
-
-    def _get_media_duration(self, media_path: Path) -> Optional[float]:
-        try:
-            cmd = [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(media_path),
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            duration_str = result.stdout.strip()
-            if not duration_str:
-                return None
-            duration = float(duration_str)
-            if math.isnan(duration) or duration <= 0:
-                return None
-            return duration
-        except (subprocess.CalledProcessError, ValueError):
-            return None
-        except Exception:
-            return None
-
-    def validate_code(self, code: str) -> dict:
-        """
-        Validate Manim code without rendering
-
-        Args:
-            code: Python code to validate
 
         Returns:
             dict with validation results

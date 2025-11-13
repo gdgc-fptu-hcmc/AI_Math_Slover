@@ -10,7 +10,7 @@ AI-powered mathematical animation generator using Google Vision API, OpenAI/Anth
 - 📸 **Image Upload & Camera Capture** - Upload images or use your webcam
 - 🔍 **Google Vision OCR** - Automatic text extraction from images
 - 🤖 **AI-Powered Code Generation** - GPT-4 or Claude generates Manim code
-- 🎬 **Instant Animation** - Manim renders beautiful math animations
+- 🎬 **Instant Animation** - Manim renders beautiful math animations (no background music, pure educational content)
 - 💬 **Chat Interface** - Intuitive ChatGPT-like UI
 - ⚡ **Real-time Processing** - See results immediately
 - 🎯 **Smart Mode Selection** - Choose between Explain, Answer, or Animate modes
@@ -123,6 +123,9 @@ TEMP_DIR=./temp
 
 # Video quality (low, medium, high)
 VIDEO_QUALITY=medium
+
+# Background music (disabled by default for cleaner educational videos)
+# ENABLE_BACKGROUND_MUSIC=false
 ```
 
 ### 5. Setup Frontend
@@ -301,6 +304,13 @@ VIDEO_QUALITY=low    # Fast rendering, lower quality
 VIDEO_QUALITY=medium # Balanced (default)
 VIDEO_QUALITY=high   # Slow rendering, best quality
 ```
+
+### Background Music
+
+Background music has been **removed by default** to keep videos focused on educational content. Videos now contain only visual animations without audio, making them ideal for:
+- Classroom presentations
+- Study sessions without distraction
+- Adding your own narration/music in post-production
 
 ### Change AI Provider
 
