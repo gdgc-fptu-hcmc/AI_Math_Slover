@@ -480,6 +480,142 @@ Xuất ra phiên bản Python hoàn chỉnh đã chỉnh sửa, không kèm mark
                 "message": f"Error improving code: {str(e)}",
             }
 
+    def detect_intent(self, user_input: str) -> dict:
+        """
+        Detect user intent: explain, answer, or animate
+
+        Args:
+            user_input: User's text input
+
+        Returns:
+            dict with intent type and confidence
+        """
+        try:
+            user_input_lower = user_input.lower()
+
+            # Keywords for different intents
+            explain_keywords = [
+                "giải thích",
+                "explain",
+                "hướng dẫn",
+                "phân tích",
+                "tại sao",
+                "why",
+            ]
+            answer_keywords = [
+                "giải",
+                "solve",
+                "tính",
+                "calculate",
+                "bao nhiêu",
+                "what is",
+                "kết quả",
+            ]
+            animate_keywords = [
+                "animation",
+                "video",
+                "minh họa",
+                "vẽ",
+                "draw",
+                "show",
+                "visualize",
+            ]
+
+            # Check for explicit keywords
+            has_explain = any(
+                keyword in user_input_lower for keyword in explain_keywords
+            )
+            has_answer = any(keyword in user_input_lower for keyword in answer_keywords)
+            has_animate = any(
+                keyword in user_input_lower for keyword in animate_keywords
+            )
+
+            # Determine intent
+            if has_animate:
+                return {"intent": "animate", "confidence": 0.9}
+            elif has_explain and not has_answer:
+                return {"intent": "explain", "confidence": 0.8}
+            elif has_answer:
+                return {"intent": "answer", "confidence": 0.8}
+            else:
+                # Default to answer for math content
+                return {"intent": "answer", "confidence": 0.6}
+
+        except Exception as e:
+            return {"intent": "answer", "confidence": 0.5}
+
+    def quick_answer(self, math_text: str, user_question: str = "") -> dict:
+        """
+        Generate a quick text answer without animation
+
+        Args:
+            math_text: Mathematical content
+            user_question: Optional specific question
+
+        Returns:
+            dict with answer text
+        """
+        try:
+            if user_question:
+                prompt = f"""Bạn là gia sư toán học. Trả lời câu hỏi sau về bài toán này:
+
+Bài toán: {math_text}
+
+Câu hỏi: {user_question}
+
+Trả lời ngắn gọn, rõ ràng bằng tiếng Việt. Nếu cần giải, hãy trình bày các bước chính."""
+            else:
+                prompt = f"""Bạn là gia sư toán học. Giải bài toán sau và đưa ra đáp án:
+
+{math_text}
+
+Trả lời:
+1. Phương pháp giải (ngắn gọn)
+2. Các bước chính
+3. Đáp án cuối cùng
+
+Trình bày rõ ràng, súc tích bằng tiếng Việt."""
+
+            if self.provider == "openai":
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a helpful math tutor who responds in Vietnamese.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.7,
+                    max_tokens=800,
+                )
+                answer = response.choices[0].message.content
+
+            elif self.provider == "anthropic":
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=800,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                answer = response.content[0].text
+
+            elif self.provider == "gemini":
+                response = self.client.generate_content(prompt)
+                answer = response.text
+
+            return {
+                "success": True,
+                "answer": answer,
+                "message": "Answer generated successfully",
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "message": f"Error generating answer: {str(e)}",
+            }
+
     def explain_math(self, math_text: str) -> dict:
         """
         Generate a step-by-step explanation of a math problem
@@ -491,15 +627,16 @@ Xuất ra phiên bản Python hoàn chỉnh đã chỉnh sửa, không kèm mark
             dict with explanation
         """
         try:
-            prompt = f"""Giải thích bài toán sau hoàn toàn bằng tiếng Việt theo phong cách giáo viên luyện thi THPT Quốc gia lớp 12 chuyên về phương trình lượng giác:
+            prompt = f"""Giải thích bài toán sau hoàn toàn bằng tiếng Việt theo phong cách giáo viên luyện thi THPT Quốc gia lớp 12:
 
 {math_text}
 
 Trình bày:
 1. Nhận định đề bài và yêu cầu
-2. Các bước giải chi tiết, ưu tiên đưa bài toán về hoặc xử lý dưới dạng phương trình lượng giác lớp 12
-3. Kiến thức trọng tâm được sử dụng
-4. Kết luận và nghiệm cuối cùng
+2. Kiến thức cần sử dụng
+3. Các bước giải chi tiết (nếu là bài tập)
+4. Giải thích ý nghĩa của các khái niệm (nếu là lý thuyết)
+5. Kết luận và đáp án cuối cùng
 
 Diễn đạt rõ ràng, chuẩn chính tả, dùng thuật ngữ quen thuộc trong chương trình THPT."""
 
@@ -507,18 +644,21 @@ Diễn đạt rõ ràng, chuẩn chính tả, dùng thuật ngữ quen thuộc t
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "You are a helpful math tutor."},
+                        {
+                            "role": "system",
+                            "content": "You are a helpful math tutor who explains in Vietnamese.",
+                        },
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.7,
-                    max_tokens=1000,
+                    max_tokens=1200,
                 )
                 explanation = response.choices[0].message.content
 
             elif self.provider == "anthropic":
                 response = self.client.messages.create(
                     model=self.model,
-                    max_tokens=1000,
+                    max_tokens=1200,
                     messages=[{"role": "user", "content": prompt}],
                 )
                 explanation = response.content[0].text

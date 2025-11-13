@@ -52,6 +52,7 @@ function App() {
   const handleSendMessage = async (data) => {
     try {
       setIsLoading(true);
+      const mode = data.mode || "auto";
 
       if (data.type === "text") {
         // Handle text input
@@ -60,29 +61,48 @@ function App() {
           text: data.content,
         });
 
-        toast.loading("Generating animation...", { id: "processing" });
+        const loadingMessage =
+          mode === "explain"
+            ? "Generating explanation..."
+            : mode === "answer"
+              ? "Finding answer..."
+              : mode === "animate"
+                ? "Creating animation..."
+                : "Processing...";
 
-        // Generate code from text
-        const generateResult = await animationAPI.generate(data.content);
+        toast.loading(loadingMessage, { id: "processing" });
 
-        if (!generateResult.success) {
-          throw new Error(generateResult.message || "Failed to generate code");
-        }
-
-        // Render animation
-        const renderResult = await animationAPI.render(generateResult.code);
+        // Use smart chat endpoint
+        const result = await animationAPI.smartChat(null, data.content, mode);
 
         toast.dismiss("processing");
 
-        if (renderResult.success) {
-          addMessage({
-            role: "assistant",
-            text: "✨ I've created your animation!",
-            videoUrl: renderResult.video_url,
-          });
-          toast.success("Animation ready!");
+        if (result.success) {
+          if (result.type === "explanation") {
+            addMessage({
+              role: "assistant",
+              text: "📚 " + result.content,
+              mathText: result.math_text,
+            });
+            toast.success("Explanation ready!");
+          } else if (result.type === "answer") {
+            addMessage({
+              role: "assistant",
+              text: "⚡ " + result.content,
+              mathText: result.math_text,
+            });
+            toast.success("Answer ready!");
+          } else if (result.type === "animation") {
+            addMessage({
+              role: "assistant",
+              text: "🎬 I've created your animation!",
+              mathText: result.math_text,
+              videoUrl: result.video_url,
+            });
+            toast.success("Animation ready!");
+          }
         } else {
-          throw new Error(renderResult.message || "Rendering failed");
+          throw new Error(result.message || "Processing failed");
         }
       } else if (data.type === "image") {
         // Handle image upload/capture
@@ -95,31 +115,56 @@ function App() {
         };
         reader.readAsDataURL(data.file);
 
-        toast.loading("Processing image...", { id: "processing" });
+        const loadingMessage =
+          mode === "explain"
+            ? "Extracting and explaining..."
+            : mode === "answer"
+              ? "Extracting and solving..."
+              : mode === "animate"
+                ? "Creating animation..."
+                : "Processing image...";
 
-        // Process image to animation
-        const result = await animationAPI.fromImage(data.file);
+        toast.loading(loadingMessage, { id: "processing" });
+
+        // Use smart chat endpoint
+        const result = await animationAPI.smartChat(data.file, null, mode);
 
         toast.dismiss("processing");
 
         if (result.success) {
-          addMessage({
-            role: "assistant",
-            text: "✨ I extracted the math content and created an animation!",
-            mathText: result.math_text,
-            videoUrl: result.video_url,
-          });
-          toast.success("Animation created!");
+          if (result.type === "explanation") {
+            addMessage({
+              role: "assistant",
+              text: "📚 " + result.content,
+              mathText: result.math_text,
+            });
+            toast.success("Explanation ready!");
+          } else if (result.type === "answer") {
+            addMessage({
+              role: "assistant",
+              text: "⚡ " + result.content,
+              mathText: result.math_text,
+            });
+            toast.success("Answer ready!");
+          } else if (result.type === "animation") {
+            addMessage({
+              role: "assistant",
+              text: "🎬 I've created your animation!",
+              mathText: result.math_text,
+              videoUrl: result.video_url,
+            });
+            toast.success("Animation ready!");
+          }
         } else {
           // Partial success - show what we got
           if (result.math_text) {
             addMessage({
               role: "assistant",
-              text: `I found this math content but rendering failed. You can try again!`,
+              text: `I found this math content but processing failed. You can try again!`,
               mathText: result.math_text,
               error: result.render_error || result.message,
             });
-            toast.error("Rendering failed");
+            toast.error("Processing failed");
           } else {
             throw new Error(result.message || "Processing failed");
           }

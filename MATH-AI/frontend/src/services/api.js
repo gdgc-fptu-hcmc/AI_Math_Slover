@@ -180,6 +180,29 @@ export const animationAPI = {
 
     return response.data;
   },
+
+  /**
+   * Smart chat endpoint - auto-detects intent or uses specified mode
+   */
+  async smartChat(file = null, text = null, mode = "auto") {
+    const formData = new FormData();
+
+    if (file) {
+      formData.append("file", file);
+    }
+    if (text) {
+      formData.append("text", text);
+    }
+    formData.append("mode", mode);
+
+    const response = await api.post("/api/animation/chat", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    return response.data;
+  },
 };
 
 // Health check

@@ -9,6 +9,7 @@ const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
   const [inputText, setInputText] = useState("");
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [selectedMode, setSelectedMode] = useState("auto");
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -19,7 +20,7 @@ const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
 
   const handleSendText = () => {
     if (inputText.trim() && !isLoading) {
-      onSendMessage({ type: "text", content: inputText });
+      onSendMessage({ type: "text", content: inputText, mode: selectedMode });
       setInputText("");
     }
   };
@@ -33,13 +34,20 @@ const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
 
   const handleImageUpload = (file) => {
     setShowImageUpload(false);
-    onSendMessage({ type: "image", file });
+    onSendMessage({ type: "image", file, mode: selectedMode });
   };
 
   const handleCameraCapture = (imageBlob) => {
     setShowCamera(false);
-    onSendMessage({ type: "image", file: imageBlob });
+    onSendMessage({ type: "image", file: imageBlob, mode: selectedMode });
   };
+
+  const modes = [
+    { id: "auto", label: "Auto", icon: "🤖", color: "slate" },
+    { id: "explain", label: "Explain", icon: "📚", color: "sky" },
+    { id: "answer", label: "Answer", icon: "⚡", color: "emerald" },
+    { id: "animate", label: "Animate", icon: "🎬", color: "indigo" },
+  ];
 
   return (
     <div className="relative flex h-screen max-w-6xl mx-auto flex-col gap-6 px-4 py-6 md:px-8 lg:px-12">
@@ -157,9 +165,59 @@ const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
       {/* Input Area */}
       <div className="rounded-2xl border border-slate-800/60 bg-slate-950/60 px-4 py-4 shadow-xl shadow-slate-950/60">
         <div className="mx-auto flex max-w-4xl flex-col gap-3">
-          <div className="flex items-center justify-between text-[0.65rem] font-mono uppercase tracking-[0.3em] text-slate-400">
-            <span>Prompt → Code → Animation</span>
-            <span>∑ • ∂ • ∞</span>
+          {/* Mode Selector */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {modes.map((mode) => (
+                <button
+                  key={mode.id}
+                  onClick={() => setSelectedMode(mode.id)}
+                  disabled={isLoading}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
+                    selectedMode === mode.id
+                      ? `border-${mode.color}-400/70 bg-${mode.color}-900/60 text-${mode.color}-100 shadow-lg shadow-${mode.color}-900/40`
+                      : "border-slate-700/50 bg-slate-900/40 text-slate-400 hover:border-slate-600/70 hover:text-slate-200"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                  style={
+                    selectedMode === mode.id
+                      ? {
+                          borderColor:
+                            mode.color === "slate"
+                              ? "rgb(148 163 184 / 0.7)"
+                              : mode.color === "sky"
+                                ? "rgb(56 189 248 / 0.7)"
+                                : mode.color === "emerald"
+                                  ? "rgb(52 211 153 / 0.7)"
+                                  : "rgb(129 140 248 / 0.7)",
+                          backgroundColor:
+                            mode.color === "slate"
+                              ? "rgb(15 23 42 / 0.6)"
+                              : mode.color === "sky"
+                                ? "rgb(12 74 110 / 0.6)"
+                                : mode.color === "emerald"
+                                  ? "rgb(6 78 59 / 0.6)"
+                                  : "rgb(49 46 129 / 0.6)",
+                          color:
+                            mode.color === "slate"
+                              ? "rgb(226 232 240)"
+                              : mode.color === "sky"
+                                ? "rgb(224 242 254)"
+                                : mode.color === "emerald"
+                                  ? "rgb(209 250 229)"
+                                  : "rgb(224 231 255)",
+                        }
+                      : {}
+                  }
+                  title={`${mode.label} mode`}
+                >
+                  <span>{mode.icon}</span>
+                  <span>{mode.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="text-[0.65rem] font-mono uppercase tracking-[0.3em] text-slate-400">
+              ∑ • ∂ • ∞
+            </div>
           </div>
 
           <div className="flex items-end gap-3">

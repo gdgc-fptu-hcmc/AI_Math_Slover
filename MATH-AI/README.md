@@ -13,6 +13,11 @@ AI-powered mathematical animation generator using Google Vision API, OpenAI/Anth
 - 🎬 **Instant Animation** - Manim renders beautiful math animations
 - 💬 **Chat Interface** - Intuitive ChatGPT-like UI
 - ⚡ **Real-time Processing** - See results immediately
+- 🎯 **Smart Mode Selection** - Choose between Explain, Answer, or Animate modes
+  - **Auto Mode** 🤖 - AI detects the best response type
+  - **Explain Mode** 📚 - Get detailed step-by-step explanations (fast, text-only)
+  - **Answer Mode** ⚡ - Get quick solutions without animations (fast, text-only)
+  - **Animate Mode** 🎬 - Generate full video animations (slower, visual)
 
 ## 🏗️ Architecture
 
@@ -184,28 +189,53 @@ The app will be available at: `http://localhost:3000`
 
 ## 📱 Using the Application
 
+### Choose Your Response Mode
+
+Before sending your question, select the mode that best fits your needs:
+
+- **🤖 Auto** - Let AI decide (explains simple questions, animates complex ones)
+- **📚 Explain** - Get detailed explanations without video (fast: 2-5 seconds)
+- **⚡ Answer** - Get quick solutions without video (fast: 2-5 seconds)
+- **🎬 Animate** - Create full video animations (slow: 30-60 seconds)
+
 ### Method 1: Upload Image
 
-1. Click "Upload Image" button
-2. Drag & drop or browse for an image with math content
-3. Click "Generate Animation"
-4. Wait for processing (usually 30-60 seconds)
-5. Watch your animation!
+1. Select your preferred mode (Auto, Explain, Answer, or Animate)
+2. Click "Upload Image" button
+3. Drag & drop or browse for an image with math content
+4. Wait for processing
+5. Get your result based on selected mode!
 
 ### Method 2: Camera Capture
 
-1. Click "Camera" button
-2. Allow camera access
-3. Position math problem in frame
-4. Click "Capture"
-5. Click "Use This Photo"
-6. Watch the animation being generated!
+1. Select your preferred mode
+2. Click "Camera" button
+3. Allow camera access
+4. Position math problem in frame
+5. Click "Capture"
+6. Click "Use This Photo"
+7. Get your result instantly!
 
 ### Method 3: Text Input
 
-1. Type or paste a math problem in the chat box
-2. Press Enter or click Send
-3. AI will generate and render the animation
+1. Select your preferred mode
+2. Type or paste a math problem in the chat box
+3. Press Enter or click Send
+4. Receive explanation, answer, or animation based on your selection
+
+### When to Use Each Mode?
+
+- **Explain Mode**: When you want to understand HOW to solve the problem
+  - Example: "Explain how to solve this quadratic equation"
+  - Response: Step-by-step explanation in Vietnamese
+  
+- **Answer Mode**: When you just need the solution quickly
+  - Example: "What is the derivative of x²?"
+  - Response: Quick answer with key steps
+  
+- **Animate Mode**: When you want visual representation
+  - Example: "Show me how sine wave transforms"
+  - Response: Beautiful animated video with narration
 
 ## 📂 Project Structure
 
@@ -254,6 +284,9 @@ MATH-AI/
 - `POST /api/animation/generate` - Generate Manim code from text
 - `POST /api/animation/render` - Render animation from code
 - `POST /api/animation/from-image` - Complete pipeline (image → animation)
+- `POST /api/animation/chat` - **Smart chat endpoint** (supports all modes)
+  - Query params: `file` (optional), `text` (optional), `mode` (auto|explain|answer|animate)
+  - Returns: Response based on selected mode
 - `POST /api/animation/explain` - Explain math problem
 - `POST /api/animation/improve` - Improve existing code
 - `POST /api/animation/validate` - Validate Manim code
@@ -301,7 +334,13 @@ Edit `frontend/tailwind.config.js` to change color scheme.
 ### Slow rendering
 - Use `VIDEO_QUALITY=low` for faster results
 - Complex animations take longer (30-120 seconds)
+- **Use Explain or Answer mode** for instant responses without video
 - Consider upgrading server resources
+
+### "No response" or timeout
+- Animation mode takes 30-60 seconds - this is normal
+- For faster results, use Explain or Answer mode (2-5 seconds)
+- Check backend logs for errors
 
 ## 📝 Example Math Problems
 

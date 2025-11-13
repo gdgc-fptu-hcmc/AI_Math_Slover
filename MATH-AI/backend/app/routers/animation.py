@@ -364,6 +364,163 @@ async def cleanup_temp_files(max_age_hours: int = 24):
         raise HTTPException(status_code=500, detail=f"Error cleaning up: {str(e)}")
 
 
+@router.post("/chat")
+async def smart_chat(
+    file: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None),
+    mode: Optional[str] = Form("auto"),
+):
+    """
+    Smart chat endpoint that automatically chooses the best response mode
+
+    Args:
+        file: Optional image file with math content
+        text: Optional text input
+        mode: Response mode - "auto", "explain", "answer", or "animate"
+
+    Returns:
+        Response based on detected intent or specified mode
+    """
+    try:
+        math_text = ""
+
+        # Extract math content from image if provided
+        if file:
+            image_content = await file.read()
+            vision_result = vision_service.detect_math_content(image_content)
+
+            if not vision_result["success"]:
+                raise HTTPException(
+                    status_code=500,
+                    detail=vision_result.get("message", "Failed to extract text"),
+                )
+
+            math_text = vision_result["text"]
+            has_math = vision_result.get("has_math", False)
+
+            if not has_math:
+                return JSONResponse(
+                    content={
+                        "success": False,
+                        "message": "No mathematical content detected in image",
+                        "type": "error",
+                    },
+                    status_code=400,
+                )
+        elif text:
+            math_text = text
+        else:
+            raise HTTPException(
+                status_code=400, detail="Either file or text must be provided"
+            )
+
+        # Detect intent if mode is auto
+        if mode == "auto":
+            intent_result = ai_service.detect_intent(math_text)
+            detected_mode = intent_result["intent"]
+        else:
+            detected_mode = mode
+
+        # Process based on mode
+        if detected_mode == "explain":
+            # Explain mode - detailed explanation
+            result = ai_service.explain_math(math_text)
+
+            if not result["success"]:
+                raise HTTPException(
+                    status_code=500,
+                    detail=result.get("message", "Failed to generate explanation"),
+                )
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "type": "explanation",
+                    "math_text": math_text,
+                    "content": result["explanation"],
+                    "message": "Explanation generated successfully",
+                }
+            )
+
+        elif detected_mode == "answer":
+            # Answer mode - quick solution
+            result = ai_service.quick_answer(math_text)
+
+            if not result["success"]:
+                raise HTTPException(
+                    status_code=500,
+                    detail=result.get("message", "Failed to generate answer"),
+                )
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "type": "answer",
+                    "math_text": math_text,
+                    "content": result["answer"],
+                    "message": "Answer generated successfully",
+                }
+            )
+
+        elif detected_mode == "animate":
+            # Animate mode - full animation pipeline
+            # Generate code
+            ai_result = ai_service.generate_manim_code(math_text)
+
+            if not ai_result["success"]:
+                raise HTTPException(
+                    status_code=500,
+                    detail=ai_result.get("message", "Failed to generate code"),
+                )
+
+            # Render animation
+            session_id = str(uuid.uuid4())
+            render_result = manim_service.render_animation(
+                ai_result["code"], "MathAnimation", session_id
+            )
+
+            if not render_result["success"]:
+                # Return code even if rendering fails
+                return JSONResponse(
+                    content={
+                        "success": False,
+                        "type": "animation",
+                        "math_text": math_text,
+                        "code": ai_result["code"],
+                        "render_error": render_result.get("error"),
+                        "message": "Animation rendering failed, but code was generated",
+                    },
+                    status_code=500,
+                )
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "type": "animation",
+                    "math_text": math_text,
+                    "video_url": render_result["video_url"],
+                    "code": ai_result["code"],
+                    "session_id": session_id,
+                    "message": "Animation created successfully",
+                }
+            )
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid mode: {mode}. Use 'auto', 'explain', 'answer', or 'animate'",
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        print(f"ERROR in smart chat: {error_trace}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing request: {str(e)}"
+        )
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint for animation service"""
