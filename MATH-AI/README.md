@@ -13,8 +13,13 @@ AI-powered mathematical animation generator using Google Vision API, OpenAI/Anth
 - 🎬 **Instant Animation** - Manim renders beautiful math animations (no background music, pure educational content)
 - 💬 **Chat Interface** - Intuitive ChatGPT-like UI
 - ⚡ **Real-time Processing** - See results immediately
+- 🧠 **Intelligent Input Classification** - AI automatically detects math vs non-math content
+  - Greetings (Hi, Hello) → Friendly chat response
+  - Math problems → Solve with animation
+  - Math questions → Explain concepts
+  - Casual questions → Conversational response
 - 🎯 **Smart Mode Selection** - Choose between Explain, Answer, or Animate modes
-  - **Auto Mode** 🤖 - AI detects the best response type
+  - **Auto Mode** 🤖 - AI detects the best response type (recommended)
   - **Explain Mode** 📚 - Get detailed step-by-step explanations (fast, text-only)
   - **Answer Mode** ⚡ - Get quick solutions without animations (fast, text-only)
   - **Animate Mode** 🎬 - Generate full video animations (slower, visual)
@@ -228,6 +233,11 @@ Before sending your question, select the mode that best fits your needs:
 
 ### When to Use Each Mode?
 
+- **Auto Mode** (Recommended): Let AI decide based on your input
+  - "Hi" → Chat response
+  - "Giải x² + 1 = 0" → Answer or Animation
+  - "Đạo hàm là gì?" → Explanation
+  
 - **Explain Mode**: When you want to understand HOW to solve the problem
   - Example: "Explain how to solve this quadratic equation"
   - Response: Step-by-step explanation in Vietnamese
@@ -239,6 +249,22 @@ Before sending your question, select the mode that best fits your needs:
 - **Animate Mode**: When you want visual representation
   - Example: "Show me how sine wave transforms"
   - Response: Beautiful animated video with narration
+
+### Intelligent Input Detection
+
+The system now automatically classifies your input:
+
+✅ **Math Content** → Processes with appropriate math tools
+- Equations: `x² + 5x + 6 = 0`
+- Expressions: `sin(x) + cos(x)`
+- Problems: "Tính tích phân của x² từ 0 đến 1"
+
+💬 **Non-Math Content** → Friendly conversational response
+- Greetings: "Hi", "Hello", "Xin chào"
+- Questions: "What can you do?", "Bạn là ai?"
+- Help requests: "Help me", "Hướng dẫn sử dụng"
+
+This prevents wasted processing time on non-math inputs!
 
 ## 📂 Project Structure
 
@@ -288,8 +314,9 @@ MATH-AI/
 - `POST /api/animation/render` - Render animation from code
 - `POST /api/animation/from-image` - Complete pipeline (image → animation)
 - `POST /api/animation/chat` - **Smart chat endpoint** (supports all modes)
-  - Query params: `file` (optional), `text` (optional), `mode` (auto|explain|answer|animate)
-  - Returns: Response based on selected mode
+  - Query params: `file` (optional), `text` (optional), `mode` (auto|explain|answer|animate|chat)
+  - Returns: Response based on selected mode or auto-classification
+  - **New**: Automatically classifies input and returns appropriate response type
 - `POST /api/animation/explain` - Explain math problem
 - `POST /api/animation/improve` - Improve existing code
 - `POST /api/animation/validate` - Validate Manim code
@@ -352,15 +379,26 @@ Edit `frontend/tailwind.config.js` to change color scheme.
 - For faster results, use Explain or Answer mode (2-5 seconds)
 - Check backend logs for errors
 
-## 📝 Example Math Problems
+## 📝 Example Inputs
 
 Try these examples:
 
-1. **Quadratic Formula**: `x = (-b ± √(b²-4ac)) / 2a`
-2. **Pythagorean Theorem**: `a² + b² = c²`
-3. **Derivative**: `d/dx (x²) = 2x`
-4. **Integration**: `∫ x dx = x²/2 + C`
-5. **Trigonometry**: `sin²θ + cos²θ = 1`
+### Chat Examples (Non-Math)
+1. "Hi" → Friendly greeting
+2. "Xin chào" → Vietnamese greeting
+3. "Bạn có thể làm gì?" → Capability explanation
+
+### Math Problem Examples
+1. **Quadratic**: "Giải x² + 5x + 6 = 0"
+2. **Trigonometry**: "Giải 2sin(x) + cos(x) = 1"
+3. **Calculus**: "Tính đạo hàm của x²"
+4. **Integration**: "Tính tích phân ∫ x dx"
+5. **Algebra**: "Tìm nghiệm phương trình 2x + 5 = 11"
+
+### Math Concept Questions
+1. "Đạo hàm là gì?"
+2. "Explain what is derivative"
+3. "Giải thích tích phân"
 
 ## 🤝 Contributing
 

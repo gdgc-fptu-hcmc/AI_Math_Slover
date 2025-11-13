@@ -78,7 +78,14 @@ function App() {
         toast.dismiss("processing");
 
         if (result.success) {
-          if (result.type === "explanation") {
+          if (result.type === "chat") {
+            // Non-math chat response
+            addMessage({
+              role: "assistant",
+              text: "💬 " + result.content,
+            });
+            toast.success("Response ready!");
+          } else if (result.type === "explanation") {
             addMessage({
               role: "assistant",
               text: "📚 " + result.content,
@@ -132,7 +139,14 @@ function App() {
         toast.dismiss("processing");
 
         if (result.success) {
-          if (result.type === "explanation") {
+          if (result.type === "chat") {
+            // Non-math chat response (shouldn't happen for images, but handle it)
+            addMessage({
+              role: "assistant",
+              text: "💬 " + result.content,
+            });
+            toast.success("Response ready!");
+          } else if (result.type === "explanation") {
             addMessage({
               role: "assistant",
               text: "📚 " + result.content,

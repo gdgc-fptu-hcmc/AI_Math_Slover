@@ -376,16 +376,18 @@ async def smart_chat(
     Args:
         file: Optional image file with math content
         text: Optional text input
-        mode: Response mode - "auto", "explain", "answer", or "animate"
+        mode: Response mode - "auto", "explain", "answer", "animate", or "chat"
 
     Returns:
         Response based on detected intent or specified mode
     """
     try:
         math_text = ""
+        is_image_input = False
 
         # Extract math content from image if provided
         if file:
+            is_image_input = True
             image_content = await file.read()
             vision_result = vision_service.detect_math_content(image_content)
 
@@ -414,14 +416,59 @@ async def smart_chat(
                 status_code=400, detail="Either file or text must be provided"
             )
 
-        # Detect intent if mode is auto
+        # Classify input if mode is auto
         if mode == "auto":
-            intent_result = ai_service.detect_intent(math_text)
-            detected_mode = intent_result["intent"]
+            classification = ai_service.classify_input(math_text)
+            detected_mode = classification.get("suggested_action", "chat")
+            is_math = classification.get("is_math", False)
+            content_type = classification.get("content_type", "unclear")
+
+            # If not math content and not from image, handle as chat
+            if not is_math and not is_image_input:
+                chat_result = ai_service.chat_response(math_text)
+                if not chat_result["success"]:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=chat_result.get(
+                            "message", "Failed to generate response"
+                        ),
+                    )
+
+                return JSONResponse(
+                    content={
+                        "success": True,
+                        "type": "chat",
+                        "content": chat_result["response"],
+                        "classification": {
+                            "is_math": is_math,
+                            "content_type": content_type,
+                            "confidence": classification.get("confidence", 0.0),
+                        },
+                        "message": "Chat response generated successfully",
+                    }
+                )
         else:
             detected_mode = mode
 
-        # Process based on mode
+        # Handle chat mode explicitly
+        if detected_mode == "chat":
+            chat_result = ai_service.chat_response(math_text)
+            if not chat_result["success"]:
+                raise HTTPException(
+                    status_code=500,
+                    detail=chat_result.get("message", "Failed to generate response"),
+                )
+
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "type": "chat",
+                    "content": chat_result["response"],
+                    "message": "Chat response generated successfully",
+                }
+            )
+
+        # Process math content based on mode
         if detected_mode == "explain":
             # Explain mode - detailed explanation
             result = ai_service.explain_math(math_text)

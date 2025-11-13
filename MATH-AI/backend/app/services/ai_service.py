@@ -555,9 +555,145 @@ Xuất ra phiên bản Python hoàn chỉnh đã chỉnh sửa, không kèm mark
                 "message": f"Error improving code: {str(e)}",
             }
 
+    def classify_input(self, user_input: str) -> dict:
+        """
+        Classify user input to determine if it contains math content
+        and what type of response is appropriate
+
+        Args:
+            user_input: User's text input
+
+        Returns:
+            dict with classification results
+        """
+        try:
+            prompt = f"""Phân loại nội dung đầu vào sau đây. Trả lời theo định dạng JSON chính xác:
+
+Nội dung: "{user_input}"
+
+Phân tích và trả về JSON với cấu trúc:
+{{
+    "is_math": true/false,
+    "content_type": "greeting/casual/math_problem/math_question/unclear",
+    "suggested_action": "chat/explain/answer/animate",
+    "confidence": 0.0-1.0,
+    "reason": "lý do ngắn gọn"
+}}
+
+Quy tắc phân loại:
+- is_math = true nếu có: phương trình, biểu thức toán, bài toán, hỏi về toán
+- content_type:
+  * "greeting": chào hỏi (hi, hello, xin chào)
+  * "casual": câu hỏi thường (bạn là ai, help me)
+  * "math_problem": bài toán cụ thể (giải x^2+1=0, tính tích phân)
+  * "math_question": hỏi về khái niệm toán (đạo hàm là gì?)
+  * "unclear": không rõ ràng
+- suggested_action:
+  * "chat": trả lời thông thường (greeting, casual)
+  * "explain": giải thích khái niệm (math_question)
+  * "answer": giải bài toán nhanh (math_problem ngắn)
+  * "animate": tạo video (math_problem phức tạp)
+
+Chỉ trả về JSON, không thêm text nào khác."""
+
+            if self.provider == "gemini":
+                response = self.client.generate_content(prompt)
+                result_text = response.text.strip()
+
+                # Extract JSON from response
+                import json
+                import re
+
+                # Try to find JSON in response
+                json_match = re.search(r"\{.*\}", result_text, re.DOTALL)
+                if json_match:
+                    result = json.loads(json_match.group())
+                else:
+                    result = json.loads(result_text)
+
+                return {
+                    "success": True,
+                    "is_math": result.get("is_math", False),
+                    "content_type": result.get("content_type", "unclear"),
+                    "suggested_action": result.get("suggested_action", "chat"),
+                    "confidence": result.get("confidence", 0.5),
+                    "reason": result.get("reason", ""),
+                }
+            else:
+                # Fallback for non-Gemini providers
+                return self._classify_with_keywords(user_input)
+
+        except Exception as e:
+            print(f"Classification error: {e}")
+            # Fallback to keyword-based classification
+            return self._classify_with_keywords(user_input)
+
+    def _classify_with_keywords(self, user_input: str) -> dict:
+        """Fallback keyword-based classification"""
+        user_lower = user_input.lower()
+
+        # Check for greetings
+        greetings = ["hi", "hello", "xin chào", "chào", "hey"]
+        if any(g in user_lower for g in greetings):
+            return {
+                "success": True,
+                "is_math": False,
+                "content_type": "greeting",
+                "suggested_action": "chat",
+                "confidence": 0.9,
+                "reason": "Detected greeting",
+            }
+
+        # Check for math symbols/keywords
+        math_indicators = [
+            "=",
+            "+",
+            "-",
+            "*",
+            "/",
+            "^",
+            "x^",
+            "sin",
+            "cos",
+            "tan",
+            "log",
+            "integral",
+            "derivative",
+            "tích phân",
+            "đạo hàm",
+            "phương trình",
+            "giải",
+            "tính",
+            "solve",
+            "calculate",
+        ]
+
+        has_math = any(indicator in user_lower for indicator in math_indicators)
+
+        if has_math:
+            return {
+                "success": True,
+                "is_math": True,
+                "content_type": "math_problem",
+                "suggested_action": "answer",
+                "confidence": 0.7,
+                "reason": "Detected math keywords",
+            }
+
+        # Default: casual conversation
+        return {
+            "success": True,
+            "is_math": False,
+            "content_type": "casual",
+            "suggested_action": "chat",
+            "confidence": 0.6,
+            "reason": "No math content detected",
+        }
+
     def detect_intent(self, user_input: str) -> dict:
         """
         Detect user intent: explain, answer, or animate
+        (Deprecated: Use classify_input instead)
 
         Args:
             user_input: User's text input
@@ -565,59 +701,74 @@ Xuất ra phiên bản Python hoàn chỉnh đã chỉnh sửa, không kèm mark
         Returns:
             dict with intent type and confidence
         """
+        classification = self.classify_input(user_input)
+        return {
+            "intent": classification.get("suggested_action", "chat"),
+            "confidence": classification.get("confidence", 0.5),
+        }
+
+    def chat_response(self, user_input: str) -> dict:
+        """
+        Generate a conversational response for non-math content
+
+        Args:
+            user_input: User's input text
+
+        Returns:
+            dict with chat response
+        """
         try:
-            user_input_lower = user_input.lower()
+            prompt = f"""Bạn là trợ lý AI thân thiện chuyên về toán học. Trả lời HOÀN TOÀN BẰNG TIẾNG VIỆT.
 
-            # Keywords for different intents
-            explain_keywords = [
-                "giải thích",
-                "explain",
-                "hướng dẫn",
-                "phân tích",
-                "tại sao",
-                "why",
-            ]
-            answer_keywords = [
-                "giải",
-                "solve",
-                "tính",
-                "calculate",
-                "bao nhiêu",
-                "what is",
-                "kết quả",
-            ]
-            animate_keywords = [
-                "animation",
-                "video",
-                "minh họa",
-                "vẽ",
-                "draw",
-                "show",
-                "visualize",
-            ]
+Người dùng nói: "{user_input}"
 
-            # Check for explicit keywords
-            has_explain = any(
-                keyword in user_input_lower for keyword in explain_keywords
-            )
-            has_answer = any(keyword in user_input_lower for keyword in answer_keywords)
-            has_animate = any(
-                keyword in user_input_lower for keyword in animate_keywords
-            )
+Hướng dẫn trả lời:
+- Nếu là lời chào: Chào lại thân thiện và giới thiệu bạn có thể giúp gì về toán học
+- Nếu hỏi về khả năng: Giải thích bạn có thể giải toán, tạo video giảng dạy
+- Nếu không liên quan toán: Lịch sự chuyển hướng về toán học
+- Luôn nhiệt tình và khuyến khích học toán
 
-            # Determine intent
-            if has_animate:
-                return {"intent": "animate", "confidence": 0.9}
-            elif has_explain and not has_answer:
-                return {"intent": "explain", "confidence": 0.8}
-            elif has_answer:
-                return {"intent": "answer", "confidence": 0.8}
-            else:
-                # Default to answer for math content
-                return {"intent": "answer", "confidence": 0.6}
+Trả lời ngắn gọn (2-3 câu), thân thiện bằng tiếng Việt:"""
+
+            if self.provider == "openai":
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a friendly math tutor assistant who responds in Vietnamese.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.7,
+                    max_tokens=300,
+                )
+                answer = response.choices[0].message.content
+
+            elif self.provider == "anthropic":
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=300,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                answer = response.content[0].text
+
+            elif self.provider == "gemini":
+                response = self.client.generate_content(prompt)
+                answer = response.text
+
+            return {
+                "success": True,
+                "response": answer,
+                "message": "Chat response generated successfully",
+            }
 
         except Exception as e:
-            return {"intent": "answer", "confidence": 0.5}
+            return {
+                "success": False,
+                "error": str(e),
+                "message": f"Error generating chat response: {str(e)}",
+            }
 
     def quick_answer(self, math_text: str, user_question: str = "") -> dict:
         """
