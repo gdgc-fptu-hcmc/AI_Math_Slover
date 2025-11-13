@@ -134,86 +134,161 @@ YÊU CẦU ĐỒ THỊ!
 - Bắt buộc vẽ đồ thị hoặc biểu diễn hàm số phù hợp
 - Dùng axes = Axes() để tạo hệ trục toạ độ
 - Dùng axes.get_graph() để vẽ hàm và lựa chọn miền hợp lý
-- Ghi nhãn trục và điểm quan trọng bằng tiếng Việt
+- Ghi nhãn trục và điểm quan trọng bằng tiếng Việt (dùng Text với font="Arial")
 - Hiển thị phương trình hoặc hàm ngay cạnh đồ thị
 """
 
-        base_prompt = f"""Bạn là một giáo viên toán Việt Nam chuyên luyện thi THPT Quốc gia lớp 12 về chủ đề giải phương trình lượng giác. Luôn tạo mã ManimGL ngắn gọn, rõ ràng để dẫn dắt học sinh giải một bài toán phương trình lượng giác điển hình, ngay cả khi nội dung đầu vào ở ngôn ngữ khác.
+        base_prompt = f"""Bạn là một giáo viên toán Việt Nam chuyên luyện thi THPT Quốc gia. Tạo mã ManimGL với 100% nội dung hiển thị bằng TIẾNG VIỆT để giảng dạy bài toán sau.
 
-Nội dung toán học đầu vào:
+Nội dung toán học:
 {math_text}
 
 {f"Ngữ cảnh bổ sung: {additional_context}" if additional_context else ""}
 
 {graph_instruction}
 
-YÊU CẦU CHUNG:
-1. Toàn bộ văn bản hiển thị trong video (Tex, Text, chú thích) phải bằng tiếng Việt chuẩn và phần mở đầu phải giới thiệu bài toán bằng tiếng Việt.
-2. Bố cục rõ ràng: Nêu bài toán → Chiến lược xử lý → Các bước giải → Kết luận nghiệm.
-3. Luôn nhấn mạnh phương pháp giải phương trình lượng giác lớp 12 (hạ bậc, đặt ẩn phụ t = tan(x/2), dùng công thức cộng/trừ, v.v.). Nếu đề bài không thuộc dạng này, hãy chuyển bài toán về một phương trình lượng giác tương đương trước khi giải.
-4. Nếu cần minh họa hàm số/đồ thị, bắt buộc vẽ bằng axes = Axes() và chú thích bằng tiếng Việt.
-5. Nhãn điểm, bước giải, lời bình đều phải bằng tiếng Việt và bám sát ngữ cảnh luyện thi THPT.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 YÊU CẦU TIẾNG VIỆT (BẮT BUỘC 100%)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-QUY TẮC MANIMGL (QUAN TRỌNG):
+1. ✅ MỌI văn bản giải thích PHẢI bằng tiếng Việt:
+   - Tiêu đề: "Giải phương trình", "Tìm đạo hàm", "Tính tích phân"
+   - Các bước: "Bước 1: Biến đổi", "Bước 2: Giải phương trình"
+   - Nhận xét: "Ta có", "Suy ra", "Vậy", "Kết luận"
+   - Chú thích đồ thị: "Đồ thị hàm số", "Điểm cực trị", "Tiệm cận"
+
+2. ✅ Cách sử dụng Text và Tex ĐÚNG:
+
+   ✓ ĐÚNG - Văn bản tiếng Việt:
+   Text("Giải phương trình bậc hai", font="Arial", color=YELLOW)
+   Text("Bước 1: Biến đổi phương trình", font="Arial")
+   Text("Ta có: Δ = b² - 4ac", font="Arial")
+
+   ✓ ĐÚNG - Công thức toán học (không có chữ):
+   Tex("x^2 + 2x + 1 = 0")
+   Tex("\\\\Delta = b^2 - 4ac")
+   Tex("x = \\\\frac{{-b \\\\pm \\\\sqrt{{\\\\Delta}}}}{{2a}}")
+
+   ✓ ĐÚNG - Kết hợp tiếng Việt và công thức:
+   giai_thich = Text("Phương trình có nghiệm:", font="Arial")
+   nghiem = Tex("x_1 = -1, \\\\quad x_2 = -1")
+   VGroup(giai_thich, nghiem).arrange(DOWN)
+
+   ✗ SAI - KHÔNG BAO GIỜ làm thế này:
+   Tex("x = 0 \\\\text{{hoặc}} x = 1")  # ✗ LaTeX không hỗ trợ tiếng Việt
+   Tex("Giải: x^2 = 4")  # ✗ Chữ tiếng Việt trong Tex
+   TexText("Bước 1")  # ✗ TexText không tồn tại trong ManimGL
+
+3. ✅ Cấu trúc video bằng tiếng Việt:
+   - Mở đầu: Giới thiệu bài toán bằng Text()
+   - Nội dung: Các bước giải thích bằng Text() + công thức bằng Tex()
+   - Kết thúc: Kết luận và đáp án bằng Text()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 QUY TẮC MANIMGL (NGHIÊM NGẶT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 • Import: from manimlib import *
-• Biểu thức toán học: Tex("sin^2 x + cos^2 x = 1") — chỉ dùng cho công thức LaTeX không có chữ tiếng Việt
-• Văn bản tiếng Việt: BẮT BUỘC dùng Text("Chiến lược giải", font="Arial") — KHÔNG BAO GIỜ dùng TexText cho tiếng Việt vì LaTeX không hỗ trợ Unicode Việt
-• NGHIÊM CẤM dùng \\text{{...}} bên trong Tex() để chứa tiếng Việt (ví dụ: KHÔNG dùng Tex("x = 0 \\\\text{{hoặc}} x = 1"))
-• Khi cần kết hợp công thức và văn bản tiếng Việt, hãy tách thành nhiều đối tượng riêng biệt hoặc dùng VGroup
-• Luôn đặt font="Arial" hoặc font tương tự khi dùng Text để hiển thị tiếng Việt có dấu chính xác
+• Văn bản tiếng Việt: Text("nội dung", font="Arial", color=...)
+• Công thức toán: Tex("x^2 + y^2 = r^2")
 • Đồ thị: axes = Axes(); graph = axes.get_graph(lambda x: ...)
-• Nhãn trục: Tạo riêng bằng Tex("x").next_to(axes.x_axis, DOWN) và Tex("y").next_to(axes.y_axis, LEFT) — KHÔNG dùng get_axis_labels(x_label=..., y_label=...)
-• Nhãn đồ thị: dùng Tex().next_to(...); không dùng get_graph_label()
-• Màu sắc: BLUE, RED, GREEN, YELLOW, ORANGE, PURPLE, GREY (không dùng GRAY)
-• Hiệu ứng: Write(), FadeIn(), Transform(), ShowCreation() (không dùng Create!) — với FadeIn chỉ truyền một Mobject hoặc gói chung bằng VGroup khi cần nhiều đối tượng, KHÔNG đặt scale_factor tùy chỉnh
-• Định vị: .to_edge(UP/DOWN/LEFT/RIGHT), .shift(UP/DOWN), .next_to(obj, DOWN)
-• Biến đổi Mobject: dùng .animate hoặc Animation tương ứng, không truyền Mobject trực tiếp vào self.play
+• Nhãn trục: Text("Trục hoành", font="Arial").next_to(axes.x_axis, DOWN)
+• Màu sắc: BLUE, RED, GREEN, YELLOW, ORANGE, PURPLE, GREY
+• Hiệu ứng: Write(), FadeIn(), Transform(), ShowCreation()
+• Định vị: .to_edge(UP), .shift(DOWN*2), .next_to(obj, RIGHT)
+• Thời gian: self.wait(2-3) sau mỗi bước quan trọng
+• Tổng thời lượng: Tối thiểu 18 giây
 
-PHONG CÁCH MÃ:
-✓ Tên biến ngắn gọn, dễ hiểu (van_de, buoc1, ket_luan, do_thi)
-✓ Chú thích ngắn bằng tiếng Việt giải thích các phần chính
-✓ Gom nhóm thao tác liên quan
-✓ Dùng self.wait(2-3) cho các điểm quan trọng; tổng thời lượng tối thiểu 18 giây
-✓ Dùng run_time=2 hoặc run_time=3 để làm chậm hoạt ảnh quan trọng
-✓ Với đồ thị: self.play(ShowCreation(graph), run_time=3) và self.wait(4) để học sinh quan sát
-✓ Giữ tổng số dòng ≤ 65 nếu có thể
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 MẪU CODE CHUẨN (100% TIẾNG VIỆT)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-MẪU MINH HỌA (VĂN BẢN TIẾNG VIỆT):
 ```python
 from manimlib import *
 
 class MathAnimation(Scene):
     def construct(self):
-        # Giới thiệu bài toán
-        tieu_de = Text("Giải phương trình lượng giác", color=YELLOW)
+        # Tiêu đề bằng tiếng Việt
+        tieu_de = Text("Giải phương trình bậc hai", font="Arial", color=YELLOW)
         tieu_de.to_edge(UP)
-        bai_toan = Tex("2\\\\sin x + \\\\sqrt{{3}}\\\\cos x = 1")
-        bai_toan.next_to(tieu_de, DOWN)
-
-        self.play(Write(tieu_de), Write(bai_toan), run_time=2)
+        self.play(Write(tieu_de), run_time=2)
         self.wait(2)
 
-        # Chiến lược giải
-        chien_luoc = Text("Đặt \\\\tan \\\\frac{{x}}{{2}} = t", color=BLUE).scale(0.9)
-        chien_luoc.next_to(bai_toan, DOWN, buff=0.6)
-        self.play(FadeIn(chien_luoc), run_time=2)
+        # Đề bài - công thức toán học
+        de_bai = Tex("x^2 + 5x + 6 = 0", color=WHITE).scale(1.2)
+        de_bai.next_to(tieu_de, DOWN, buff=1)
+        self.play(Write(de_bai), run_time=2)
         self.wait(2)
 
-        # Kết luận
-        ket_luan = Tex("x = \\\\frac{{\\\\pi}}{{6}} + k2\\\\pi", color=GREEN).scale(1.1)
-        ket_luan.move_to(ORIGIN)
-        self.play(Transform(bai_toan, ket_luan), run_time=2)
-        self.wait(4)
+        # Bước 1 - giải thích bằng tiếng Việt
+        buoc1_text = Text("Bước 1: Tìm delta", font="Arial", color=BLUE)
+        buoc1_text.next_to(de_bai, DOWN, buff=1)
+        self.play(FadeIn(buoc1_text), run_time=1.5)
+        self.wait(2)
+
+        # Công thức delta
+        delta_formula = Tex("\\\\Delta = b^2 - 4ac", color=WHITE)
+        delta_formula.next_to(buoc1_text, DOWN)
+        self.play(Write(delta_formula), run_time=2)
+        self.wait(2)
+
+        # Tính toán
+        delta_value = Tex("\\\\Delta = 25 - 24 = 1", color=GREEN)
+        delta_value.next_to(delta_formula, DOWN)
+        self.play(Write(delta_value), run_time=2)
+        self.wait(2)
+
+        # Bước 2
+        buoc2_text = Text("Bước 2: Tìm nghiệm", font="Arial", color=BLUE)
+        buoc2_text.move_to(buoc1_text.get_center())
+        self.play(
+            FadeOut(buoc1_text),
+            FadeOut(delta_formula),
+            FadeOut(delta_value),
+            FadeIn(buoc2_text),
+            run_time=2
+        )
+        self.wait(2)
+
+        # Công thức nghiệm
+        nghiem_formula = Tex("x = \\\\frac{{-b \\\\pm \\\\sqrt{{\\\\Delta}}}}{{2a}}")
+        nghiem_formula.next_to(buoc2_text, DOWN)
+        self.play(Write(nghiem_formula), run_time=2)
+        self.wait(2)
+
+        # Kết quả
+        ket_qua = Text("Vậy phương trình có 2 nghiệm:", font="Arial", color=ORANGE)
+        nghiem1 = Tex("x_1 = -2", color=GREEN)
+        nghiem2 = Tex("x_2 = -3", color=GREEN)
+
+        ket_qua.move_to(buoc2_text.get_center())
+        nghiem_group = VGroup(nghiem1, nghiem2).arrange(RIGHT, buff=1)
+        nghiem_group.next_to(ket_qua, DOWN)
+
+        self.play(
+            FadeOut(buoc2_text),
+            FadeOut(nghiem_formula),
+            FadeIn(ket_qua),
+            run_time=2
+        )
+        self.wait(1)
+        self.play(Write(nghiem_group), run_time=2)
+        self.wait(3)
 ```
 
-LƯU Ý QUAN TRỌNG:
-- Trả về duy nhất mã Python, không kèm markdown hay giải thích.
-- Luôn bắt đầu bằng 'from manimlib import *' và dùng lớp MathAnimation.
-- Nếu có hàm số, đảm bảo đồ thị xuất hiện ít nhất 4 giây.
-- Kết luận phải ghi rõ nghiệm bằng tiếng Việt.
-- Giữ đúng mạch: Giới thiệu → Chiến lược → Giải từng bước → Kết luận → (Tùy chọn) Đồ thị.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ LƯU Ý QUAN TRỌNG
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Tạo mã ngay bây giờ:"""
+✓ Trả về DUY NHẤT mã Python, không kèm ```python hoặc giải thích
+✓ Luôn bắt đầu: from manimlib import *
+✓ Luôn dùng: class MathAnimation(Scene):
+✓ Mọi Text đều có font="Arial" để hiển thị tiếng Việt đúng
+✓ Tách biệt: Text() cho chữ, Tex() cho công thức
+✓ Thời lượng tối thiểu 18 giây (dùng self.wait())
+✓ Màu sắc rõ ràng để phân biệt các phần
+
+Hãy tạo mã ngay bây giờ với 100% nội dung tiếng Việt:"""
 
         return base_prompt
 
@@ -557,24 +632,31 @@ Xuất ra phiên bản Python hoàn chỉnh đã chỉnh sửa, không kèm mark
         """
         try:
             if user_question:
-                prompt = f"""Bạn là gia sư toán học. Trả lời câu hỏi sau về bài toán này:
+                prompt = f"""Bạn là gia sư toán học Việt Nam. Trả lời HOÀN TOÀN BẰNG TIẾNG VIỆT câu hỏi sau:
 
 Bài toán: {math_text}
 
 Câu hỏi: {user_question}
 
-Trả lời ngắn gọn, rõ ràng bằng tiếng Việt. Nếu cần giải, hãy trình bày các bước chính."""
+Yêu cầu:
+- Trả lời 100% bằng tiếng Việt
+- Ngắn gọn, dễ hiểu
+- Nếu cần giải, trình bày các bước chính
+- Dùng ký hiệu toán học chuẩn"""
             else:
-                prompt = f"""Bạn là gia sư toán học. Giải bài toán sau và đưa ra đáp án:
+                prompt = f"""Bạn là gia sư toán học Việt Nam. Giải bài toán sau HOÀN TOÀN BẰNG TIẾNG VIỆT:
 
-{math_text}
+Bài toán: {math_text}
 
-Trả lời:
-1. Phương pháp giải (ngắn gọn)
-2. Các bước chính
-3. Đáp án cuối cùng
+Trả lời bằng tiếng Việt theo cấu trúc:
+1. **Phương pháp:** (tóm tắt cách giải)
+2. **Các bước giải:**
+   - Bước 1: ...
+   - Bước 2: ...
+   - Bước 3: ...
+3. **Đáp án:** (kết quả cuối cùng)
 
-Trình bày rõ ràng, súc tích bằng tiếng Việt."""
+Lưu ý: Tất cả giải thích và nhận xét đều phải bằng tiếng Việt."""
 
             if self.provider == "openai":
                 response = self.client.chat.completions.create(
@@ -627,18 +709,46 @@ Trình bày rõ ràng, súc tích bằng tiếng Việt."""
             dict with explanation
         """
         try:
-            prompt = f"""Giải thích bài toán sau hoàn toàn bằng tiếng Việt theo phong cách giáo viên luyện thi THPT Quốc gia lớp 12:
+            prompt = f"""Bạn là giáo viên toán Việt Nam chuyên luyện thi THPT Quốc gia. Giải thích bài toán sau HOÀN TOÀN BẰNG TIẾNG VIỆT:
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+📚 BÀI TOÁN
+━━━━━━━━━━━━━━━━━━━━━━━━
 
 {math_text}
 
-Trình bày:
-1. Nhận định đề bài và yêu cầu
-2. Kiến thức cần sử dụng
-3. Các bước giải chi tiết (nếu là bài tập)
-4. Giải thích ý nghĩa của các khái niệm (nếu là lý thuyết)
-5. Kết luận và đáp án cuối cùng
+━━━━━━━━━━━━━━━━━━━━━━━━
+✍️ YÊU CẦU GIẢI THÍCH
+━━━━━━━━━━━━━━━━━━━━━━━━
 
-Diễn đạt rõ ràng, chuẩn chính tả, dùng thuật ngữ quen thuộc trong chương trình THPT."""
+Trình bày 100% bằng tiếng Việt theo cấu trúc:
+
+**1. PHÂN TÍCH ĐỀ BÀI**
+- Xác định dạng toán
+- Những gì đã cho và cần tìm
+- Điều kiện (nếu có)
+
+**2. KIẾN THỨC CẦN SỬ DỤNG**
+- Công thức liên quan
+- Định lý, tính chất cần áp dụng
+- Phương pháp giải
+
+**3. CÁC BƯỚC GIẢI CHI TIẾT**
+- Bước 1: ... (giải thích tại sao làm bước này)
+- Bước 2: ... (biến đổi và giải thích)
+- Bước 3: ... (tiếp tục đến khi có kết quả)
+
+**4. KẾT LUẬN**
+- Đáp án cuối cùng
+- Kiểm tra (nếu cần)
+- Nhận xét về bài toán
+
+Lưu ý:
+✓ Giải thích dễ hiểu như đang dạy học sinh
+✓ Nêu rõ lý do của mỗi bước
+✓ Dùng thuật ngữ chuẩn trong SGK
+✓ Tất cả nội dung phải bằng tiếng Việt
+✓ Sử dụng ký hiệu toán học chuẩn"""
 
             if self.provider == "openai":
                 response = self.client.chat.completions.create(
