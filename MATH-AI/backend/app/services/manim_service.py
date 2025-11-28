@@ -17,9 +17,9 @@ class ManimService:
 
         # Video quality settings with frame rate
         self.quality_settings = {
-            "low": ["-ql"],
-            "medium": ["-qm"],
-            "high": ["-qh"],
+            "low": ["-l"],
+            "medium": ["-m"],
+            "high": ["-h"],
         }
         self.quality = os.getenv("VIDEO_QUALITY", "medium")
 
@@ -59,18 +59,19 @@ class ManimService:
                 f.write(processed_code)
 
             # Prepare render command
-            quality_flags = self.quality_settings.get(self.quality, ["-qm"])
+            quality_flags = self.quality_settings.get(self.quality, ["-m"])
 
-            # Use manimgl command with absolute paths
+            output_filename = f"animation_{session_id}.mp4"
+
+            # Use manim command with absolute paths
             cmd = [
-                "manimgl",
+                "manim",
                 str(abs_script_path),
                 scene_name,
-                "-w",  # Write to file
-                "--video_dir",
+                "--media_dir",
                 str(abs_temp_dir),
-                "--file_name",
-                f"animation_{session_id}",
+                "-o",
+                output_filename,
             ]
             cmd += [str(flag) for flag in quality_flags]
 
@@ -152,7 +153,7 @@ class ManimService:
             if not isinstance(node, ast.Call):
                 continue
 
-            # Handle both FadeIn(...) and manimlib.animation.fading.FadeIn(...)
+            # Handle both FadeIn(...) and manim.animation.fading.FadeIn(...)
             func = node.func
             func_name = None
             if isinstance(func, ast.Name):
@@ -317,30 +318,10 @@ class ManimService:
 
     def _fix_get_axis_labels(self, code: str) -> str:
         """
-        Replace axes.get_axis_labels(x_label="x", y_label="y") with manual label creation.
-        ManimGL's get_axis_labels() doesn't accept x_label/y_label keyword arguments.
+        This function is disabled as it is specific to ManimGL.
+        The community version of Manim supports get_axis_labels with keyword arguments.
         """
-        import re
-
-        # Pattern to find get_axis_labels with keyword arguments
-        pattern = r'(\w+)\.get_axis_labels\s*\(\s*x_label\s*=\s*(["\'])([^"\']*)\2\s*,\s*y_label\s*=\s*(["\'])([^"\']*)\4\s*\)'
-
-        def replace_labels(match):
-            axes_var = match.group(1)
-            x_text = match.group(3)
-            y_text = match.group(5)
-
-            # Generate replacement code that creates labels manually
-            replacement = (
-                f"VGroup("
-                f'Tex("{x_text}").next_to({axes_var}.x_axis, DOWN), '
-                f'Tex("{y_text}").next_to({axes_var}.y_axis, LEFT)'
-                f")"
-            )
-            return replacement
-
-        sanitized = re.sub(pattern, replace_labels, code)
-        return sanitized
+        return code
 
     def _compute_line_offsets(self, code: str) -> List[int]:
         offsets: List[int] = []
@@ -387,6 +368,13 @@ class ManimService:
 
         return None
 
+    def validate_code(self, code: str) -> dict:
+        """
+        Validate Manim code for basic syntax and required structure.
+
+        Args:
+            code: The code to validate
+
         Returns:
             dict with validation results
         """
@@ -395,13 +383,13 @@ class ManimService:
             compile(code, "<string>", "exec")
 
             # Check for required imports
-            has_import = "from manimlib" in code or "import manimlib" in code
+            has_import = "from manim" in code or "import manim" in code
             has_scene = "class" in code and "(Scene)" in code
             has_construct = "def construct(self)" in code
 
             issues = []
             if not has_import:
-                issues.append("Missing 'from manimlib import *' or similar import")
+                issues.append("Missing 'from manim import *' or similar import")
             if not has_scene:
                 issues.append("Missing Scene class definition")
             if not has_construct:

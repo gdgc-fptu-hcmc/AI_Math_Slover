@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Configure axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8001",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",
   timeout: 300000, // 5 minutes for video rendering
   headers: {
     "Content-Type": "application/json",
