@@ -1,19 +1,22 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FiSend, FiImage, FiCamera, FiX } from "react-icons/fi";
+import { FiSend, FiImage, FiCamera, FiX, FiRefreshCw, FiEdit3, FiZap } from "react-icons/fi";
 import { BiLoaderAlt } from "react-icons/bi";
-import ImageUploader from "./ImageUploader";
-import CameraCapture from "./CameraCapture";
+import { motion, AnimatePresence } from "framer-motion";
 import VideoPlayer from "./VideoPlayer";
 
 const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
   const [inputText, setInputText] = useState("");
-  const [showImageUpload, setShowImageUpload] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
+  const [inputMode, setInputMode] = useState("text"); // 'text', 'image', 'camera'
   const [selectedMode, setSelectedMode] = useState("auto");
+  const [dragActive, setDragActive] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [webcamActive, setWebcamActive] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const webcamRef = useRef(null);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -28,381 +31,519 @@ const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSendText();
+      if (inputMode === "text" && inputText.trim()) {
+        handleSendText();
+      } else if (inputMode === "image" && selectedFile) {
+        handleImageUpload();
+      }
     }
   };
 
-  const handleImageUpload = (file) => {
-    setShowImageUpload(false);
-    onSendMessage({ type: "image", file, mode: selectedMode });
+  const handleImageSelect = (file) => {
+    if (file) {
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+      setInputMode("image");
+    }
   };
 
-  const handleCameraCapture = (imageBlob) => {
-    setShowCamera(false);
-    onSendMessage({ type: "image", file: imageBlob, mode: selectedMode });
+  const handleImageUpload = () => {
+    if (selectedFile) {
+      onSendMessage({ type: "image", file: selectedFile, mode: selectedMode });
+      clearImageInput();
+    }
+  };
+
+  const clearImageInput = () => {
+    setImagePreview(null);
+    setSelectedFile(null);
+    setInputMode("text");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleImageSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const startWebcam = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+      });
+      if (webcamRef.current) {
+        webcamRef.current.srcObject = stream;
+      }
+      setWebcamActive(true);
+      setInputMode("camera");
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      alert("Could not access camera. Please check permissions.");
+    }
+  };
+
+  const captureFromWebcam = () => {
+    if (webcamRef.current) {
+      const canvas = document.createElement("canvas");
+      canvas.width = webcamRef.current.videoWidth;
+      canvas.height = webcamRef.current.videoHeight;
+      canvas.getContext("2d").drawImage(webcamRef.current, 0, 0);
+      
+      canvas.toBlob((blob) => {
+        const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+        handleImageSelect(file);
+        stopWebcam();
+      }, "image/jpeg");
+    }
+  };
+
+  const stopWebcam = () => {
+    if (webcamRef.current && webcamRef.current.srcObject) {
+      webcamRef.current.srcObject.getTracks().forEach(track => track.stop());
+      webcamRef.current.srcObject = null;
+    }
+    setWebcamActive(false);
+    setInputMode("text");
   };
 
   const modes = [
-    { id: "auto", label: "Auto", icon: "🤖", color: "slate" },
-    { id: "explain", label: "Explain", icon: "📚", color: "sky" },
-    { id: "answer", label: "Answer", icon: "⚡", color: "emerald" },
-    { id: "animate", label: "Animate", icon: "🎬", color: "indigo" },
+    { id: "auto", label: "Auto", icon: "🤖", color: "cyan", desc: "Smart detection" },
+    { id: "explain", label: "Explain", icon: "📚", color: "sky", desc: "Step-by-step" },
+    { id: "answer", label: "Solve", icon: "⚡", color: "emerald", desc: "Quick answer" },
+    { id: "animate", label: "Animate", icon: "🎬", color: "violet", desc: "Full video" },
   ];
 
   return (
-    <div className="relative flex h-screen max-w-6xl mx-auto flex-col gap-6 px-4 py-6 md:px-8 lg:px-12">
-      <div className="absolute inset-0 -z-10 rounded-3xl border border-slate-800/60 bg-slate-950/60 shadow-[0_40px_120px_-60px_rgba(14,165,233,0.55)] backdrop-blur-2xl" />
-      <div className="absolute inset-0 -z-20 rounded-[2.5rem] bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.24),transparent_60%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.18),transparent_55%)]" />
-      {/* Header */}
-      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 px-6 py-5 shadow-xl shadow-slate-950/60 backdrop-blur-lg">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <img
-                src="/start-with-startup-logo-with-text.svg"
-                alt="Start With Startup"
-                className="h-10 w-auto flex-shrink-0 sm:h-12"
-              />
-              <h1 className="text-3xl font-semibold tracking-tight text-sky-100 sm:text-[2.5rem] sm:leading-[1.1]">
-                Math Animation AI
-              </h1>
-            </div>
-            <p className="text-sm text-slate-300 md:text-base">
-              Upload problems, explore algebraic structures, and watch ideas
-              unfold through motion.
-            </p>
-            <div className="flex flex-wrap items-center gap-3 text-[0.65rem] font-mono uppercase tracking-[0.35em] text-sky-300/80">
-              <span>∑ SERIES</span>
-              <span className="text-slate-500/70">•</span>
-              <span>∞ LIMITS</span>
-              <span className="text-slate-500/70">•</span>
-              <span>∫ CALCULUS</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-5 rounded-2xl border border-slate-700/70 bg-slate-900/80 px-6 py-4 text-slate-200 shadow-inner shadow-slate-950/60">
-            <div className="text-right">
-              <p className="text-[0.65rem] uppercase tracking-[0.35em] text-slate-400">
-                Session State
-              </p>
-              <p className="text-lg font-semibold text-sky-200">
-                {isLoading ? "Processing…" : "Ready"}
-              </p>
-            </div>
-            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-sky-500 via-cyan-500 to-emerald-400 p-[2px] shadow-lg shadow-sky-900/50">
-              <div
-                className={`flex h-full w-full items-center justify-center rounded-full ${isLoading ? "bg-sky-950/90" : "bg-slate-950/95"}`}
+    <div 
+      className="relative flex h-screen max-w-7xl mx-auto flex-col gap-4 p-4 md:p-6"
+      onDragEnter={handleDrag}
+      onDragLeave={handleDrag}
+      onDragOver={handleDrag}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      <AnimatePresence>
+        {dragActive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
+          >
+            <div className="text-center">
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ repeat: Infinity, duration: 1.5 }}
+                className="mb-6 text-8xl"
               >
-                <span className="text-xl text-sky-100">
-                  {isLoading ? "∂" : "π"}
-                </span>
-              </div>
+                📊
+              </motion.div>
+              <h3 className="text-3xl font-bold text-sky-200 mb-2">Drop your math here</h3>
+              <p className="text-slate-400">Release to analyze and animate</p>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Compact Header */}
+      <motion.div 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="flex items-center justify-between rounded-3xl border border-slate-700/40 bg-slate-900/60 px-6 py-4 backdrop-blur-xl"
+      >
+        <div className="flex items-center gap-4">
+          <img
+            src="/start-with-startup-logo-with-text.svg"
+            alt="Logo"
+            className="h-10 w-auto"
+          />
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-sky-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
+              Math Animation AI
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">Transform equations into motion</p>
           </div>
         </div>
-      </div>
+        
+        <div className="flex items-center gap-3">
+          <div className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+            isLoading 
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" 
+              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+          }`}>
+            {isLoading ? "🔄 Processing" : "✓ Ready"}
+          </div>
+        </div>
+      </motion.div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-800/60 bg-slate-950/40 px-6 py-8 shadow-inner shadow-slate-950/60 scrollbar-thin">
-        {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-10">
-            <div className="space-y-3 text-center">
-              <div className="text-6xl font-semibold text-sky-200">∫Σ∞</div>
-              <h2 className="text-3xl font-semibold text-sky-100">
-                Welcome to Math Animation AI
-              </h2>
-              <p className="text-base text-slate-300 md:text-lg">
-                Transform handwritten expressions into cinematic Manim
-                animations and explore the reasoning visually.
-              </p>
+      {/* Messages Area with smooth animations */}
+      <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-800/40 bg-slate-950/30 p-4 md:p-6 backdrop-blur-sm scrollbar-thin">
+        <AnimatePresence mode="popLayout">
+          {messages.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="space-y-4">
+              {messages.map((message, index) => (
+                <MessageBubble 
+                  key={`${message.timestamp}-${index}`} 
+                  message={message}
+                  onRetry={(msg) => {
+                    // Implement retry logic
+                    console.log("Retry:", msg);
+                  }}
+                />
+              ))}
+              {isLoading && <LoadingMessage />}
             </div>
-            <div className="grid w-full max-w-3xl grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-2xl border border-sky-500/30 bg-sky-900/30 p-5 shadow-lg shadow-sky-900/30 transition hover:border-sky-400/70 hover:shadow-sky-800/50">
-                <div className="mb-3 text-3xl">📷</div>
-                <h3 className="text-lg font-semibold text-sky-100">
-                  Capture Concepts
-                </h3>
-                <p className="mt-2 text-sm text-sky-100/80">
-                  Upload a photo or scan and let vision models extract
-                  mathematical notation with high fidelity.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-900/25 p-5 shadow-lg shadow-emerald-900/30 transition hover:border-emerald-400/70 hover:shadow-emerald-800/50">
-                <div className="mb-3 text-3xl">🧠</div>
-                <h3 className="text-lg font-semibold text-emerald-100">
-                  Compose Scenes
-                </h3>
-                <p className="mt-2 text-sm text-emerald-100/80">
-                  AI assembles Manim code, synchronising geometry, narration,
-                  and highlights that mirror your problem.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-indigo-500/30 bg-indigo-900/25 p-5 shadow-lg shadow-indigo-900/30 transition hover:border-indigo-400/70 hover:shadow-indigo-800/50">
-                <div className="mb-3 text-3xl">🎬</div>
-                <h3 className="text-lg font-semibold text-indigo-100">
-                  Render Proofs
-                </h3>
-                <p className="mt-2 text-sm text-indigo-100/80">
-                  Preview the animation instantly, download the video, or
-                  fine-tune the generated scene for deeper insight.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-full border border-slate-700/60 bg-slate-900/60 px-6 py-3 font-mono text-xs uppercase tracking-[0.35em] text-slate-300">
-              {"e^{iπ} + 1 = 0 — the poetry of mathematics in motion"}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {messages.map((message, index) => (
-              <MessageBubble key={index} message={message} />
-            ))}
-            {isLoading && <LoadingMessage />}
-          </div>
-        )}
+          )}
+        </AnimatePresence>
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="rounded-2xl border border-slate-800/60 bg-slate-950/60 px-4 py-4 shadow-xl shadow-slate-950/60">
-        <div className="mx-auto flex max-w-4xl flex-col gap-3">
-          {/* Mode Selector */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              {modes.map((mode) => (
-                <button
-                  key={mode.id}
-                  onClick={() => setSelectedMode(mode.id)}
-                  disabled={isLoading}
-                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition ${
-                    selectedMode === mode.id
-                      ? `border-${mode.color}-400/70 bg-${mode.color}-900/60 text-${mode.color}-100 shadow-lg shadow-${mode.color}-900/40`
-                      : "border-slate-700/50 bg-slate-900/40 text-slate-400 hover:border-slate-600/70 hover:text-slate-200"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
-                  style={
-                    selectedMode === mode.id
-                      ? {
-                          borderColor:
-                            mode.color === "slate"
-                              ? "rgb(148 163 184 / 0.7)"
-                              : mode.color === "sky"
-                                ? "rgb(56 189 248 / 0.7)"
-                                : mode.color === "emerald"
-                                  ? "rgb(52 211 153 / 0.7)"
-                                  : "rgb(129 140 248 / 0.7)",
-                          backgroundColor:
-                            mode.color === "slate"
-                              ? "rgb(15 23 42 / 0.6)"
-                              : mode.color === "sky"
-                                ? "rgb(12 74 110 / 0.6)"
-                                : mode.color === "emerald"
-                                  ? "rgb(6 78 59 / 0.6)"
-                                  : "rgb(49 46 129 / 0.6)",
-                          color:
-                            mode.color === "slate"
-                              ? "rgb(226 232 240)"
-                              : mode.color === "sky"
-                                ? "rgb(224 242 254)"
-                                : mode.color === "emerald"
-                                  ? "rgb(209 250 229)"
-                                  : "rgb(224 231 255)",
-                        }
-                      : {}
-                  }
-                  title={`${mode.label} mode`}
-                >
-                  <span>{mode.icon}</span>
-                  <span>{mode.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="text-[0.65rem] font-mono uppercase tracking-[0.3em] text-slate-400">
-              ∑ • ∂ • ∞
-            </div>
-          </div>
+      {/* Mode Selector - More compact and intuitive */}
+      <motion.div 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-900/40 border border-slate-700/30 backdrop-blur-sm"
+      >
+        <span className="text-xs text-slate-400 font-medium mr-2">Mode:</span>
+        {modes.map((mode) => (
+          <motion.button
+            key={mode.id}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setSelectedMode(mode.id)}
+            disabled={isLoading}
+            className={`relative px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+              selectedMode === mode.id
+                ? `bg-${mode.color}-500/20 text-${mode.color}-200 border border-${mode.color}-500/40 shadow-lg shadow-${mode.color}-500/20`
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={mode.desc}
+          >
+            <span className="mr-1.5">{mode.icon}</span>
+            {mode.label}
+          </motion.button>
+        ))}
+      </motion.div>
 
-          <div className="flex items-end gap-3">
-            <div className="flex flex-1 items-end gap-2 rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 shadow-inner focus-within:border-sky-400/70 focus-within:ring-2 focus-within:ring-sky-500/40">
+      {/* Input Area - Fluid and adaptive */}
+      <motion.div 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="rounded-2xl border border-slate-700/40 bg-slate-900/60 p-3 backdrop-blur-xl"
+      >
+        <AnimatePresence mode="wait">
+          {inputMode === "camera" && webcamActive ? (
+            <motion.div
+              key="camera"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-3"
+            >
+              <video
+                ref={webcamRef}
+                autoPlay
+                playsInline
+                className="w-full rounded-xl bg-black"
+                style={{ maxHeight: "300px" }}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={captureFromWebcam}
+                  className="flex-1 btn-primary py-3 rounded-xl"
+                >
+                  <FiCamera className="inline mr-2" />
+                  Capture
+                </button>
+                <button
+                  onClick={stopWebcam}
+                  className="px-4 py-3 rounded-xl border border-slate-600 hover:bg-slate-800 transition"
+                >
+                  <FiX />
+                </button>
+              </div>
+            </motion.div>
+          ) : inputMode === "image" && imagePreview ? (
+            <motion.div
+              key="image-preview"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-3"
+            >
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-full rounded-xl max-h-64 object-contain bg-slate-950/50"
+                />
+                <button
+                  onClick={clearImageInput}
+                  className="absolute top-2 right-2 p-2 rounded-full bg-rose-500/90 hover:bg-rose-500 transition"
+                >
+                  <FiX />
+                </button>
+              </div>
               <button
-                onClick={() => setShowImageUpload(true)}
+                onClick={handleImageUpload}
                 disabled={isLoading}
-                className="group rounded-xl border border-transparent bg-slate-800/70 p-2 text-slate-300 transition hover:border-sky-400/60 hover:text-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Upload Image"
+                className="w-full btn-primary py-3 rounded-xl disabled:opacity-50"
               >
-                <FiImage className="text-xl transition group-hover:text-sky-300" />
+                {isLoading ? (
+                  <>
+                    <BiLoaderAlt className="inline mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <FiZap className="inline mr-2" />
+                    Generate Animation
+                  </>
+                )}
               </button>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="text-input"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex items-end gap-2"
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
+                accept="image/*"
+                className="hidden"
+              />
+              
               <button
-                onClick={() => setShowCamera(true)}
+                onClick={() => fileInputRef.current?.click()}
                 disabled={isLoading}
-                className="group rounded-xl border border-transparent bg-slate-800/70 p-2 text-slate-300 transition hover:border-emerald-400/60 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Capture from Camera"
+                className="p-3 rounded-xl border border-slate-600/50 hover:border-sky-500/50 hover:bg-slate-800/50 transition disabled:opacity-50"
+                title="Upload image"
               >
-                <FiCamera className="text-xl transition group-hover:text-emerald-300" />
+                <FiImage className="text-xl" />
               </button>
+              
+              <button
+                onClick={startWebcam}
+                disabled={isLoading}
+                className="p-3 rounded-xl border border-slate-600/50 hover:border-emerald-500/50 hover:bg-slate-800/50 transition disabled:opacity-50"
+                title="Use camera"
+              >
+                <FiCamera className="text-xl" />
+              </button>
+              
               <textarea
                 ref={inputRef}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Describe the theorem, equation, or geometric construction you want to animate..."
+                placeholder="Describe your equation or drop an image..."
                 disabled={isLoading}
-                rows="1"
-                className="flex-1 bg-transparent px-2 py-2 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-0"
-                style={{ resize: "none" }}
+                rows={1}
+                className="flex-1 bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500/50 focus:ring-2 focus:ring-sky-500/20 transition resize-none disabled:opacity-50"
               />
-            </div>
-            <button
-              onClick={handleSendText}
-              disabled={!inputText.trim() || isLoading}
-              className="flex h-[52px] min-w-[52px] items-center justify-center rounded-2xl bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-400 px-4 py-3 font-semibold text-slate-950 shadow-lg shadow-sky-900/40 transition hover:from-sky-400 hover:to-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Send"
-            >
-              {isLoading ? (
-                <BiLoaderAlt className="text-xl text-slate-950/80" />
-              ) : (
+              
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleSendText}
+                disabled={!inputText.trim() || isLoading}
+                className="p-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
                 <FiSend className="text-xl" />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Modals */}
-      {showImageUpload && (
-        <Modal onClose={() => setShowImageUpload(false)}>
-          <ImageUploader onUpload={handleImageUpload} />
-        </Modal>
-      )}
-
-      {showCamera && (
-        <Modal onClose={() => setShowCamera(false)}>
-          <CameraCapture onCapture={handleCameraCapture} />
-        </Modal>
-      )}
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 };
 
-// Message Bubble Component
-const MessageBubble = ({ message }) => {
+// Empty state with quick actions
+const EmptyState = () => {
+  const examples = [
+    { icon: "∫", label: "Integrate x² dx", type: "calculus" },
+    { icon: "Σ", label: "Sequence and series", type: "algebra" },
+    { icon: "∂", label: "Partial derivatives", type: "calculus" },
+    { icon: "∞", label: "Limits", type: "analysis" },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col items-center justify-center h-full min-h-[400px] text-center px-4"
+    >
+      <motion.div
+        animate={{ rotate: [0, 5, -5, 0] }}
+        transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+        className="text-7xl mb-6 font-bold bg-gradient-to-br from-sky-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent"
+      >
+        ∫ Σ ∞
+      </motion.div>
+      
+      <h2 className="text-3xl font-bold text-slate-100 mb-3">
+        Math in Motion
+      </h2>
+      <p className="text-slate-400 max-w-md mb-8">
+        Upload equations, capture problems, or type questions—watch them come alive through beautiful animations
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 w-full max-w-md">
+        {examples.map((example, i) => (
+          <motion.button
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }}
+            whileHover={{ scale: 1.05, y: -2 }}
+            className="p-4 rounded-2xl border border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/60 hover:border-sky-500/50 transition-all text-left group"
+          >
+            <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">{example.icon}</div>
+            <div className="text-sm font-medium text-slate-200">{example.label}</div>
+            <div className="text-xs text-slate-500 mt-1">{example.type}</div>
+          </motion.button>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+// Improved message bubble with actions
+const MessageBubble = ({ message, onRetry }) => {
   const isUser = message.role === "user";
 
   return (
-    <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"} animate-fade-in`}
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
     >
       <div
-        className={`max-w-[85%] rounded-3xl transition-all duration-300 ${
+        className={`max-w-[85%] rounded-2xl p-4 ${
           isUser
-            ? "message-user border border-sky-300/40 shadow-[0_20px_60px_-25px_rgba(14,165,233,0.7)]"
-            : "message-assistant border border-slate-700/60 bg-slate-900/70 text-slate-100 shadow-[0_28px_80px_-35px_rgba(8,47,73,0.9)] backdrop-blur-xl"
+            ? "bg-gradient-to-br from-sky-500 to-cyan-500 text-slate-950"
+            : "bg-slate-800/60 border border-slate-700/50 text-slate-100 backdrop-blur-sm"
         }`}
       >
-        {/* User message */}
-        {isUser && (
-          <div className="space-y-3">
-            {message.image && (
-              <img
-                src={message.image}
-                alt="Uploaded"
-                className="mb-3 max-w-xs rounded-2xl border border-sky-400/40 bg-slate-900/60 p-2 shadow-lg shadow-sky-900/40"
-              />
-            )}
-            {message.text && (
-              <p className="whitespace-pre-wrap text-base leading-relaxed tracking-wide">
-                {message.text}
-              </p>
-            )}
+        {!isUser && (
+          <div className="flex items-center gap-2 mb-2 text-xs text-sky-300 font-medium">
+            <span>🤖</span>
+            <span>AI Tutor</span>
           </div>
         )}
 
-        {/* Assistant message */}
-        {!isUser && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 text-[0.65rem] uppercase tracking-[0.35em] text-sky-300/80">
-              <span className="h-px flex-1 bg-sky-400/40" />
-              <span>AI Tutor</span>
-              <span className="h-px flex-1 bg-sky-400/40" />
+        {message.image && (
+          <img
+            src={message.image}
+            alt="Uploaded"
+            className="mb-3 rounded-xl max-w-xs"
+          />
+        )}
+
+        {message.text && (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {message.text}
+          </p>
+        )}
+
+        {message.mathText && (
+          <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
+            <div className="text-xs text-sky-300 font-medium mb-1">Extracted:</div>
+            <div className="text-sm font-mono">{message.mathText}</div>
+          </div>
+        )}
+
+        {message.videoUrl && <VideoPlayer videoUrl={message.videoUrl} />}
+
+        {message.error && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-900/30 border border-rose-500/30">
+            <div className="flex items-start gap-2">
+              <span className="text-rose-400">⚠️</span>
+              <div className="flex-1">
+                <div className="text-xs text-rose-300 font-medium mb-1">Error:</div>
+                <div className="text-xs text-rose-200/80">{message.error}</div>
+              </div>
+              <button
+                onClick={() => onRetry(message)}
+                className="p-1.5 rounded-lg hover:bg-rose-800/30 transition"
+                title="Retry"
+              >
+                <FiRefreshCw className="text-sm" />
+              </button>
             </div>
-
-            {message.text && (
-              <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-100/90">
-                {message.text}
-              </p>
-            )}
-
-            {message.mathText && (
-              <div className="rounded-2xl border border-sky-500/35 bg-sky-900/40 p-4 shadow-inner shadow-sky-900/50">
-                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-300">
-                  Extracted Math
-                </div>
-                <div className="mt-2 font-mono text-sm leading-relaxed text-sky-100">
-                  {message.mathText}
-                </div>
-              </div>
-            )}
-
-            {message.videoUrl && <VideoPlayer videoUrl={message.videoUrl} />}
-
-            {message.error && (
-              <div className="rounded-2xl border border-rose-500/40 bg-rose-950/50 p-4 shadow-inner shadow-rose-900/40">
-                <div className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-200">
-                  Error
-                </div>
-                <div className="mt-2 text-sm text-rose-100/90">
-                  {message.error}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 
-// Loading Message Component
+// Animated loading indicator
 const LoadingMessage = () => {
   return (
-    <div className="flex justify-start animate-fade-in">
-      <div className="message-assistant border border-slate-700/60 bg-slate-900/70 text-slate-200 shadow-[0_28px_80px_-35px_rgba(8,47,73,0.9)] backdrop-blur-xl">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex justify-start"
+    >
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xs uppercase tracking-[0.35em] text-sky-300">
-            Computing
-          </span>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+            className="text-sky-400"
+          >
+            ⚡
+          </motion.div>
           <div className="flex gap-1">
-            <span className="loading-dot h-2 w-2 rounded-full bg-sky-400"></span>
-            <span className="loading-dot h-2 w-2 rounded-full bg-sky-400"></span>
-            <span className="loading-dot h-2 w-2 rounded-full bg-sky-400"></span>
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
+                transition={{
+                  repeat: Infinity,
+                  duration: 1,
+                  delay: i * 0.15,
+                }}
+                className="w-2 h-2 rounded-full bg-sky-400"
+              />
+            ))}
           </div>
+          <span className="text-xs text-slate-400">Thinking...</span>
         </div>
       </div>
-    </div>
-  );
-};
-
-// Modal Component
-const Modal = ({ children, onClose }) => {
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md">
-      <div className="relative w-full max-h-[90vh] max-w-2xl overflow-y-auto rounded-3xl border border-slate-700/60 bg-slate-950/70 shadow-2xl shadow-slate-950/60 backdrop-blur-xl">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 z-10 rounded-full border border-slate-700/70 bg-slate-900/70 p-2 text-slate-200 transition hover:border-sky-400/60 hover:text-sky-200"
-          title="Close"
-        >
-          <FiX className="text-xl" />
-        </button>
-        <div className="p-8">{children}</div>
-      </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -37,7 +37,7 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Check Node
-if ! command -v node &> /dev/null; then
+if ! node --version > /dev/null 2>&1; then
     echo -e "${RED}❌ Node.js is not installed${NC}"
     exit 1
 fi
