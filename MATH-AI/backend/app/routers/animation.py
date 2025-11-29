@@ -366,6 +366,7 @@ async def cleanup_temp_files(max_age_hours: int = 24):
 
 @router.post("/chat")
 async def smart_chat(
+    
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
     mode: Optional[str] = Form("auto"),
@@ -381,6 +382,8 @@ async def smart_chat(
     Returns:
         Response based on detected intent or specified mode
     """
+    print("\n🔵 /chat ENDPOINT CALLED")
+    print(f"   text: {text}, mode: {mode}")
     try:
         math_text = ""
         is_image_input = False

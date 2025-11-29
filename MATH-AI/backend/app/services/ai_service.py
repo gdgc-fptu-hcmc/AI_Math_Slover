@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Optional
 
 import google.generativeai as genai
@@ -75,6 +76,16 @@ class AIService:
 
                 # Validate syntax
                 code = result.get("code", "")
+
+                if "from manimlib import *" in code:
+                    code = code.replace("from manimlib import *", "from manim import *")
+                
+                if "self.camera.background_color" in code:
+                    code = code.replace('self.camera.background_color = "#0f172a"', 'config.background_color = "#0f172a"')
+                    code = code.replace("self.camera.background_color", "config.background_color")
+
+                result["code"] = code
+
                 validation_error = self._validate_syntax(code)
 
                 if validation_error is None:
@@ -122,174 +133,69 @@ QUAN TRỌNG: Mã trước đó có lỗi. Hãy tạo lại với cú pháp Pyth
             }
 
     def _build_prompt(self, math_text: str, additional_context: str = "") -> str:
-        """Build the prompt for code generation"""
+        base_prompt = f"""Generate Manim Community v0.19.0 code.
 
-        # Detect if graphing is needed
-        needs_graph = self._should_generate_graph(math_text, additional_context)
+    Problem: {math_text}
 
-        graph_instruction = ""
-        if needs_graph:
-            graph_instruction = """
-YÊU CẦU ĐỒ THỊ!
-- Bắt buộc vẽ đồ thị hoặc biểu diễn hàm số phù hợp
-- Dùng axes = Axes() để tạo hệ trục toạ độ
-- Dùng axes.get_graph() để vẽ hàm và lựa chọn miền hợp lý
-- Ghi nhãn trục và điểm quan trọng bằng tiếng Việt (dùng Text với font="Arial")
-- Hiển thị phương trình hoặc hàm ngay cạnh đồ thị
-"""
+    CRITICAL RULES TO PREVENT RENDERING ERRORS:
+    1. NO font parameter (causes white boxes!)
+    2. Use font_size ONLY
+    3. Keep objects away from edges (buff=0.5 minimum)
+    4. Center layouts with .move_to(ORIGIN)
+    5. Scale large objects with .scale(0.7)
+    6. UTF-8 encoding for Vietnamese
 
-        base_prompt = f"""Bạn là một giáo viên toán Việt Nam chuyên luyện thi THPT Quốc gia. Tạo mã ManimGL với 100% nội dung hiển thị bằng TIẾNG VIỆT để giảng dạy bài toán sau.
+    WORKING TEMPLATE:
+    ```python
+    # -*- coding: utf-8 -*-
+    from manim import *
 
-Nội dung toán học:
-{math_text}
+    config.background_color = "#0f172a"
 
-{f"Ngữ cảnh bổ sung: {additional_context}" if additional_context else ""}
+    class MathAnimation(Scene):
+        def construct(self):
+            # Title - NO FONT PARAMETER!
+            title = Text("Giải hệ phương trình", font_size=36, color=YELLOW)
+            title.to_edge(UP, buff=0.5)
+            self.play(Write(title))
+            self.wait(1)
+            
+            # Equations - center them properly
+            eq1 = MathTex("x + y = 5", font_size=40)
+            eq2 = MathTex("2x - y = 1", font_size=40)
+            
+            eqs = VGroup(eq1, eq2)
+            eqs.arrange(DOWN, buff=0.3)
+            eqs.move_to(ORIGIN)  # Center on screen!
+            
+            self.play(Write(eqs))
+            self.wait(2)
+            
+            # Matrix - scale to fit
+            matrix = Matrix([[1,1,5],[2,-1,1]], h_buff=1.5, v_buff=0.8)
+            matrix.scale(0.8)  # Prevent overflow
+            matrix.next_to(eqs, DOWN, buff=0.8)
+            
+            self.play(Create(matrix))
+            self.wait(2)
+            
+            # Answer - keep away from edge
+            answer = Text("Đáp án: x=2, y=3", font_size=36, color=GREEN)
+            answer.to_edge(DOWN, buff=0.5)
+            
+            self.play(Write(answer))
+            self.wait(3)
+    ```
 
-{graph_instruction}
+    MANDATORY:
+    - NO font="Arial" or font="Sans"
+    - Use .move_to(ORIGIN) for centering
+    - Use .scale(0.7-0.9) for large objects
+    - Use buff=0.5 minimum
+    - Add UTF-8 encoding comment
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎯 YÊU CẦU TIẾNG VIỆT (BẮT BUỘC 100%)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. ✅ MỌI văn bản giải thích PHẢI bằng tiếng Việt:
-   - Tiêu đề: "Giải phương trình", "Tìm đạo hàm", "Tính tích phân"
-   - Các bước: "Bước 1: Biến đổi", "Bước 2: Giải phương trình"
-   - Nhận xét: "Ta có", "Suy ra", "Vậy", "Kết luận"
-   - Chú thích đồ thị: "Đồ thị hàm số", "Điểm cực trị", "Tiệm cận"
-
-2. ✅ Cách sử dụng Text và Tex ĐÚNG:
-
-   ✓ ĐÚNG - Văn bản tiếng Việt:
-   Text("Giải phương trình bậc hai", font="Arial", color=YELLOW)
-   Text("Bước 1: Biến đổi phương trình", font="Arial")
-   Text("Ta có: Δ = b² - 4ac", font="Arial")
-
-   ✓ ĐÚNG - Công thức toán học (không có chữ):
-   Tex("x^2 + 2x + 1 = 0")
-   Tex("\\\\Delta = b^2 - 4ac")
-   Tex("x = \\\\frac{{-b \\\\pm \\\\sqrt{{\\\\Delta}}}}{{2a}}")
-
-   ✓ ĐÚNG - Kết hợp tiếng Việt và công thức:
-   giai_thich = Text("Phương trình có nghiệm:", font="Arial")
-   nghiem = Tex("x_1 = -1, \\\\quad x_2 = -1")
-   VGroup(giai_thich, nghiem).arrange(DOWN)
-
-   ✗ SAI - KHÔNG BAO GIỜ làm thế này:
-   Tex("x = 0 \\\\text{{hoặc}} x = 1")  # ✗ LaTeX không hỗ trợ tiếng Việt
-   Tex("Giải: x^2 = 4")  # ✗ Chữ tiếng Việt trong Tex
-   TexText("Bước 1")  # ✗ TexText không tồn tại trong ManimGL
-
-3. ✅ Cấu trúc video bằng tiếng Việt:
-   - Mở đầu: Giới thiệu bài toán bằng Text()
-   - Nội dung: Các bước giải thích bằng Text() + công thức bằng Tex()
-   - Kết thúc: Kết luận và đáp án bằng Text()
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 QUY TẮC MANIMGL (NGHIÊM NGẶT)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-• Import: from manimlib import *
-• Văn bản tiếng Việt: Text("nội dung", font="Arial", color=...)
-• Công thức toán: Tex("x^2 + y^2 = r^2")
-• Đồ thị: axes = Axes(); graph = axes.get_graph(lambda x: ...)
-• Nhãn trục: Text("Trục hoành", font="Arial").next_to(axes.x_axis, DOWN)
-• Màu sắc: BLUE, RED, GREEN, YELLOW, ORANGE, PURPLE, GREY
-• Hiệu ứng: Write(), FadeIn(), Transform(), ShowCreation()
-• Định vị: .to_edge(UP), .shift(DOWN*2), .next_to(obj, RIGHT)
-• Thời gian: self.wait(2-3) sau mỗi bước quan trọng
-• Tổng thời lượng: Tối thiểu 18 giây
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📚 MẪU CODE CHUẨN (100% TIẾNG VIỆT)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-```python
-from manimlib import *
-
-class MathAnimation(Scene):
-    def construct(self):
-        # Tiêu đề bằng tiếng Việt
-        tieu_de = Text("Giải phương trình bậc hai", font="Arial", color=YELLOW)
-        tieu_de.to_edge(UP)
-        self.play(Write(tieu_de), run_time=2)
-        self.wait(2)
-
-        # Đề bài - công thức toán học
-        de_bai = Tex("x^2 + 5x + 6 = 0", color=WHITE).scale(1.2)
-        de_bai.next_to(tieu_de, DOWN, buff=1)
-        self.play(Write(de_bai), run_time=2)
-        self.wait(2)
-
-        # Bước 1 - giải thích bằng tiếng Việt
-        buoc1_text = Text("Bước 1: Tìm delta", font="Arial", color=BLUE)
-        buoc1_text.next_to(de_bai, DOWN, buff=1)
-        self.play(FadeIn(buoc1_text), run_time=1.5)
-        self.wait(2)
-
-        # Công thức delta
-        delta_formula = Tex("\\\\Delta = b^2 - 4ac", color=WHITE)
-        delta_formula.next_to(buoc1_text, DOWN)
-        self.play(Write(delta_formula), run_time=2)
-        self.wait(2)
-
-        # Tính toán
-        delta_value = Tex("\\\\Delta = 25 - 24 = 1", color=GREEN)
-        delta_value.next_to(delta_formula, DOWN)
-        self.play(Write(delta_value), run_time=2)
-        self.wait(2)
-
-        # Bước 2
-        buoc2_text = Text("Bước 2: Tìm nghiệm", font="Arial", color=BLUE)
-        buoc2_text.move_to(buoc1_text.get_center())
-        self.play(
-            FadeOut(buoc1_text),
-            FadeOut(delta_formula),
-            FadeOut(delta_value),
-            FadeIn(buoc2_text),
-            run_time=2
-        )
-        self.wait(2)
-
-        # Công thức nghiệm
-        nghiem_formula = Tex("x = \\\\frac{{-b \\\\pm \\\\sqrt{{\\\\Delta}}}}{{2a}}")
-        nghiem_formula.next_to(buoc2_text, DOWN)
-        self.play(Write(nghiem_formula), run_time=2)
-        self.wait(2)
-
-        # Kết quả
-        ket_qua = Text("Vậy phương trình có 2 nghiệm:", font="Arial", color=ORANGE)
-        nghiem1 = Tex("x_1 = -2", color=GREEN)
-        nghiem2 = Tex("x_2 = -3", color=GREEN)
-
-        ket_qua.move_to(buoc2_text.get_center())
-        nghiem_group = VGroup(nghiem1, nghiem2).arrange(RIGHT, buff=1)
-        nghiem_group.next_to(ket_qua, DOWN)
-
-        self.play(
-            FadeOut(buoc2_text),
-            FadeOut(nghiem_formula),
-            FadeIn(ket_qua),
-            run_time=2
-        )
-        self.wait(1)
-        self.play(Write(nghiem_group), run_time=2)
-        self.wait(3)
-```
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ LƯU Ý QUAN TRỌNG
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✓ Trả về DUY NHẤT mã Python, không kèm ```python hoặc giải thích
-✓ Luôn bắt đầu: from manimlib import *
-✓ Luôn dùng: class MathAnimation(Scene):
-✓ Mọi Text đều có font="Arial" để hiển thị tiếng Việt đúng
-✓ Tách biệt: Text() cho chữ, Tex() cho công thức
-✓ Thời lượng tối thiểu 18 giây (dùng self.wait())
-✓ Màu sắc rõ ràng để phân biệt các phần
-
-Hãy tạo mã ngay bây giờ với 100% nội dung tiếng Việt:"""
-
+    Generate clean code:"""
+        
         return base_prompt
 
     def _should_generate_graph(
@@ -414,18 +320,93 @@ Hãy tạo mã ngay bây giờ với 100% nội dung tiếng Việt:"""
                 "error": str(e),
                 "message": f"Gemini API error: {str(e)}",
             }
+    import re
 
     def _extract_code(self, response: str) -> str:
-        """Extract Python code from AI response"""
-        # Remove markdown code blocks if present
+        import re
+        
+        # Remove markdown
         if "```python" in response:
             code = response.split("```python")[1].split("```")[0].strip()
         elif "```" in response:
             code = response.split("```")[1].split("```")[0].strip()
         else:
             code = response.strip()
-
+        
+        # Add UTF-8 declaration
+        if "# -*- coding: utf-8 -*-" not in code:
+            code = "# -*- coding: utf-8 -*-\n" + code
+        
+        # Remove ALL font parameters (causes white boxes)
+        code = re.sub(r',?\s*font\s*=\s*["\'][^"\']*["\']', '', code)
+        
+        # Fix other issues
+        code = code.replace("from manimlib import *", "from manim import *")
+        code = code.replace("ShowCreation(", "Create(")
+        code = re.sub(r',?\s*v_lines\s*=\s*\[[^\]]*\]', '', code)
+        code = re.sub(r',?\s*h_lines\s*=\s*\[[^\]]*\]', '', code)
+        
+        # Remove Vietnamese comments
+        lines = []
+        for line in code.split("\n"):
+            if "#" in line and any(ord(c) > 127 for c in line):
+                if line.strip().startswith("#") and "coding" not in line:
+                    continue
+                line = line.split("#")[0].rstrip()
+            lines.append(line)
+        code = "\n".join(lines)
+        
+        # Ensure imports
+        if "from manim import *" not in code:
+            code = "from manim import *\n\n" + code
+        
         return code
+
+
+    # ═══════════════════════════════════════════════════════
+    # ADDITIONAL HELPER METHOD (add this too)
+    # ═══════════════════════════════════════════════════════
+
+    def _validate_manim_code(self, code: str) -> dict:
+        """
+        Validate Manim code for common issues
+        Returns dict with validation results
+        """
+        issues = []
+        
+        # Check for wrong imports
+        if "from manimlib" in code:
+            issues.append("Using 'from manimlib' instead of 'from manim'")
+        
+        # Check for self.camera
+        if "self.camera" in code:
+            issues.append("Using self.camera (not supported in Community)")
+        
+        # Check for ShowCreation
+        if "ShowCreation" in code:
+            issues.append("Using ShowCreation (should be Create)")
+        
+        # Check for v_lines in Matrix
+        if "v_lines" in code and "Matrix" in code:
+            issues.append("Using v_lines in Matrix (not supported)")
+        
+        # Check for h_lines in Matrix
+        if "h_lines" in code and "Matrix" in code:
+            issues.append("Using h_lines in Matrix (not supported)")
+        
+        # Check for config placement
+        if "config.background_color" in code and "class MathAnimation" in code:
+            config_pos = code.find("config.background_color")
+            class_pos = code.find("class MathAnimation")
+            if config_pos > class_pos:
+                issues.append("config.background_color after class definition (should be before)")
+        
+        return {
+            "valid": len(issues) == 0,
+            "issues": issues,
+            "message": "Code is valid" if len(issues) == 0 else f"Found {len(issues)} issues"
+        }
+
 
     def _validate_syntax(self, code: str) -> Optional[str]:
         """

@@ -7,10 +7,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-
+from fastapi.staticfiles import StaticFiles
 # Load environment variables
 load_dotenv()
 
+# Create FastAPI app
 # Create FastAPI app
 app = FastAPI(
     title="Math Animation AI",
@@ -32,8 +33,16 @@ app.add_middleware(
 temp_dir = Path(os.getenv("TEMP_DIR", "./temp"))
 temp_dir.mkdir(exist_ok=True)
 
-# Mount static files for serving videos
-app.mount("/videos", StaticFiles(directory=str(temp_dir)), name="videos")
+# Create videos subdirectory
+videos_dir = temp_dir / "videos"
+videos_dir.mkdir(exist_ok=True)
+
+app.mount("/videos", StaticFiles(directory=str(videos_dir)), name="videos")
+
+# Also mount /media for Manim's default location
+media_dir = Path("./media/videos")
+if media_dir.exists():
+    app.mount("/media/videos", StaticFiles(directory=str(media_dir)), name="media_videos")
 
 # Include routers
 app.include_router(image.router, prefix="/api/image", tags=["image"])
