@@ -39,7 +39,6 @@ ENV/
 .DS_Store
 
 # Backend specific
-backend/temp/
 backend/*.log
 backend/.pytest_cache/
 backend/.coverage
@@ -65,16 +64,9 @@ frontend/.env.test.local
 frontend/.env.production.local
 
 # Manim generated files
-*.mp4
-*.mov
 *.gif
 *.png
 !logo/*.png
-media/
-videos/
-images/
-Tex/
-Text/
 custom_config.yml
 
 # Logs
