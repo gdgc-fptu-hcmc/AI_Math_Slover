@@ -183,6 +183,12 @@ class ManimService:
         """
         if not code:
             return code
+        import re
+        # Replaces .get_row_mobjects(i) with .get_rows()[i]
+        code = re.sub(r'\.get_row_mobjects\(([^)]+)\)', r'.get_rows()[\1]', code)
+        
+        # Replaces .get_column_mobjects(i) with .get_columns()[i]
+        code = re.sub(r'\.get_column_mobjects\(([^)]+)\)', r'.get_columns()[\1]', code)
         try:
             tree = ast.parse(code)
         except SyntaxError:

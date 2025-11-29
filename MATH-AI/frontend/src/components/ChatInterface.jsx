@@ -1,546 +1,323 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FiSend, FiImage, FiCamera, FiX, FiRefreshCw, FiEdit3, FiZap } from "react-icons/fi";
-import { BiLoaderAlt } from "react-icons/bi";
+import { 
+  FiSend, FiPaperclip, FiVideo, FiX, FiFileText, FiImage, FiCpu, FiUser 
+} from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 import VideoPlayer from "./VideoPlayer";
+import CodeViewer from "./CodeViewer";
 
-const ChatInterface = ({ onSendMessage, messages, isLoading }) => {
+// --- NEW IMPORTS FOR MARKDOWN & MATH ---
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+
+const ChatInterface = ({ messages, isLoading, onSendMessage }) => {
   const [inputText, setInputText] = useState("");
-  const [inputMode, setInputMode] = useState("text"); // 'text', 'image', 'camera'
-  const [selectedMode, setSelectedMode] = useState("auto");
-  const [dragActive, setDragActive] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [webcamActive, setWebcamActive] = useState(false);
+  const [filePreview, setFilePreview] = useState(null);
+  const [animateMode, setAnimateMode] = useState(false);
   const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
   const fileInputRef = useRef(null);
-  const webcamRef = useRef(null);
+  const textareaRef = useRef(null);
 
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isLoading]);
 
-  const handleSendText = () => {
-    if (inputText.trim() && !isLoading) {
-      onSendMessage({ type: "text", content: inputText, mode: selectedMode });
-      setInputText("");
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
     }
-  };
+  }, [inputText]);
 
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (inputMode === "text" && inputText.trim()) {
-        handleSendText();
-      } else if (inputMode === "image" && selectedFile) {
-        handleImageUpload();
-      }
-    }
-  };
-
-  const handleImageSelect = (file) => {
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-      setInputMode("image");
-    }
-  };
-
-  const handleImageUpload = () => {
-    if (selectedFile) {
-      onSendMessage({ type: "image", file: selectedFile, mode: selectedMode });
-      clearImageInput();
-    }
-  };
-
-  const clearImageInput = () => {
-    setImagePreview(null);
-    setSelectedFile(null);
-    setInputMode("text");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleImageSelect(e.dataTransfer.files[0]);
-    }
-  };
-
-  const startWebcam = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
-      });
-      if (webcamRef.current) {
-        webcamRef.current.srcObject = stream;
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onloadend = () => setFilePreview({ type: 'image', url: reader.result, name: file.name });
+        reader.readAsDataURL(file);
+      } else if (file.type === "application/pdf") {
+        // Explicit PDF Handling
+        setFilePreview({ type: 'pdf', name: file.name });
+      } else {
+        // Generic fallback
+        setFilePreview({ type: 'file', name: file.name });
       }
-      setWebcamActive(true);
-      setInputMode("camera");
-    } catch (err) {
-      console.error("Error accessing webcam:", err);
-      alert("Could not access camera. Please check permissions.");
     }
   };
 
-  const captureFromWebcam = () => {
-    if (webcamRef.current) {
-      const canvas = document.createElement("canvas");
-      canvas.width = webcamRef.current.videoWidth;
-      canvas.height = webcamRef.current.videoHeight;
-      canvas.getContext("2d").drawImage(webcamRef.current, 0, 0);
-      
-      canvas.toBlob((blob) => {
-        const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
-        handleImageSelect(file);
-        stopWebcam();
-      }, "image/jpeg");
-    }
+  const clearFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const stopWebcam = () => {
-    if (webcamRef.current && webcamRef.current.srcObject) {
-      webcamRef.current.srcObject.getTracks().forEach(track => track.stop());
-      webcamRef.current.srcObject = null;
-    }
-    setWebcamActive(false);
-    setInputMode("text");
+  const handleSubmit = () => {
+    if ((!inputText.trim() && !selectedFile) || isLoading) return;
+
+    onSendMessage({
+      content: inputText,
+      file: selectedFile,
+      // Pass the preview type to show in the bubble
+      previewData: filePreview, 
+      animate: animateMode
+    });
+
+    setInputText("");
+    clearFile();
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
-  const modes = [
-    { id: "auto", label: "Auto", icon: "🤖", color: "cyan", desc: "Smart detection" },
-    { id: "explain", label: "Explain", icon: "📚", color: "sky", desc: "Step-by-step" },
-    { id: "answer", label: "Solve", icon: "⚡", color: "emerald", desc: "Quick answer" },
-    { id: "animate", label: "Animate", icon: "🎬", color: "violet", desc: "Full video" },
-  ];
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
 
   return (
-    <div 
-      className="relative flex h-screen max-w-7xl mx-auto flex-col gap-4 p-4 md:p-6"
-      onDragEnter={handleDrag}
-      onDragLeave={handleDrag}
-      onDragOver={handleDrag}
-      onDrop={handleDrop}
-    >
-      {/* Drag overlay */}
-      <AnimatePresence>
-        {dragActive && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-xl"
-          >
-            <div className="text-center">
-              <motion.div
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ repeat: Infinity, duration: 1.5 }}
-                className="mb-6 text-8xl"
-              >
-                📊
-              </motion.div>
-              <h3 className="text-3xl font-bold text-sky-200 mb-2">Drop your math here</h3>
-              <p className="text-slate-400">Release to analyze and animate</p>
-            </div>
-          </motion.div>
+    <div className="flex flex-col h-full relative">
+      
+      {/* 1. Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-60 select-none">
+            <div className="text-6xl mb-4 bg-slate-800 rounded-3xl p-4">👋</div>
+            <p className="font-medium">Ask a math question or upload a problem.</p>
+          </div>
         )}
-      </AnimatePresence>
 
-      {/* Compact Header */}
-      <motion.div 
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="flex items-center justify-between rounded-3xl border border-slate-700/40 bg-slate-900/60 px-6 py-4 backdrop-blur-xl"
-      >
-        <div className="flex items-center gap-4">
-          <img
-            src="/start-with-startup-logo-with-text.svg"
-            alt="Logo"
-            className="h-10 w-auto"
-          />
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-sky-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">
-              Math Animation AI
-            </h1>
-            <p className="text-xs text-slate-400 mt-0.5">Transform equations into motion</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <div className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-            isLoading 
-              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" 
-              : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-          }`}>
-            {isLoading ? "🔄 Processing" : "✓ Ready"}
-          </div>
-        </div>
-      </motion.div>
+        {messages.map((msg, idx) => (
+          <MessageBubble key={idx} message={msg} />
+        ))}
 
-      {/* Messages Area with smooth animations */}
-      <div className="flex-1 overflow-y-auto rounded-2xl border border-slate-800/40 bg-slate-950/30 p-4 md:p-6 backdrop-blur-sm scrollbar-thin">
-        <AnimatePresence mode="popLayout">
-          {messages.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message, index) => (
-                <MessageBubble 
-                  key={`${message.timestamp}-${index}`} 
-                  message={message}
-                  onRetry={(msg) => {
-                    // Implement retry logic
-                    console.log("Retry:", msg);
-                  }}
-                />
-              ))}
-              {isLoading && <LoadingMessage />}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl rounded-tl-none p-4 flex items-center gap-3">
+              <div className="flex space-x-1">
+                <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} className="w-2 h-2 bg-sky-400 rounded-full"/>
+                <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="w-2 h-2 bg-sky-400 rounded-full"/>
+                <motion.div animate={{ y: [0, -6, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} className="w-2 h-2 bg-sky-400 rounded-full"/>
+              </div>
+              <span className="text-xs text-slate-400 font-medium tracking-wide">AI IS THINKING...</span>
             </div>
-          )}
-        </AnimatePresence>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Mode Selector - More compact and intuitive */}
-      <motion.div 
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-900/40 border border-slate-700/30 backdrop-blur-sm"
-      >
-        <span className="text-xs text-slate-400 font-medium mr-2">Mode:</span>
-        {modes.map((mode) => (
-          <motion.button
-            key={mode.id}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedMode(mode.id)}
-            disabled={isLoading}
-            className={`relative px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
-              selectedMode === mode.id
-                ? `bg-${mode.color}-500/20 text-${mode.color}-200 border border-${mode.color}-500/40 shadow-lg shadow-${mode.color}-500/20`
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={mode.desc}
-          >
-            <span className="mr-1.5">{mode.icon}</span>
-            {mode.label}
-          </motion.button>
-        ))}
-      </motion.div>
+      {/* 2. Input Area */}
+      <div className="p-4 bg-slate-950/80 backdrop-blur-xl border-t border-slate-800/50">
+        <div className="max-w-4xl mx-auto bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl transition-all focus-within:ring-1 focus-within:ring-sky-500/50 focus-within:border-sky-500/50">
+          
+          {/* File Preview Banner - VISIBLE PDF INDICATOR */}
+          <AnimatePresence>
+            {filePreview && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="bg-slate-800/80 border-b border-slate-700/50 px-4 py-3 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  {filePreview.type === 'image' ? (
+                    <img src={filePreview.url} alt="preview" className="h-10 w-10 object-cover rounded-lg border border-slate-600" />
+                  ) : (
+                    // THIS IS THE PDF/FILE ICON PREVIEW
+                    <div className="h-10 w-10 shrink-0 bg-rose-500/20 text-rose-400 rounded-lg flex items-center justify-center border border-rose-500/30">
+                      <FiFileText size={20} />
+                    </div>
+                  )}
+                  <div className="flex flex-col truncate">
+                    <span className="text-sm text-slate-200 font-medium truncate">
+                      {filePreview.type === 'image' ? 'Image Attached' : 'PDF Attached'}
+                    </span>
+                    <span className="text-xs text-slate-500 truncate max-w-[200px]">
+                      {filePreview.name}
+                    </span>
+                  </div>
+                </div>
+                <button onClick={clearFile} className="p-2 hover:bg-slate-700 rounded-full text-slate-400 transition hover:text-white">
+                  <FiX />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-      {/* Input Area - Fluid and adaptive */}
-      <motion.div 
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="rounded-2xl border border-slate-700/40 bg-slate-900/60 p-3 backdrop-blur-xl"
-      >
-        <AnimatePresence mode="wait">
-          {inputMode === "camera" && webcamActive ? (
-            <motion.div
-              key="camera"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-3"
-            >
-              <video
-                ref={webcamRef}
-                autoPlay
-                playsInline
-                className="w-full rounded-xl bg-black"
-                style={{ maxHeight: "300px" }}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={captureFromWebcam}
-                  className="flex-1 btn-primary py-3 rounded-xl"
-                >
-                  <FiCamera className="inline mr-2" />
-                  Capture
-                </button>
-                <button
-                  onClick={stopWebcam}
-                  className="px-4 py-3 rounded-xl border border-slate-600 hover:bg-slate-800 transition"
-                >
-                  <FiX />
-                </button>
-              </div>
-            </motion.div>
-          ) : inputMode === "image" && imagePreview ? (
-            <motion.div
-              key="image-preview"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-3"
-            >
-              <div className="relative">
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  className="w-full rounded-xl max-h-64 object-contain bg-slate-950/50"
-                />
-                <button
-                  onClick={clearImageInput}
-                  className="absolute top-2 right-2 p-2 rounded-full bg-rose-500/90 hover:bg-rose-500 transition"
-                >
-                  <FiX />
-                </button>
-              </div>
-              <button
-                onClick={handleImageUpload}
-                disabled={isLoading}
-                className="w-full btn-primary py-3 rounded-xl disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <BiLoaderAlt className="inline mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <FiZap className="inline mr-2" />
-                    Generate Animation
-                  </>
-                )}
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="text-input"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex items-end gap-2"
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])}
-                accept="image/*"
-                className="hidden"
-              />
+          {/* Text Area */}
+          <textarea
+            ref={textareaRef}
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={animateMode ? "Describe what you want to animate..." : "Ask a math question, upload an image or PDF..."}
+            className="w-full bg-transparent border-none text-slate-100 placeholder-slate-500 px-4 py-3 max-h-[200px] focus:ring-0 resize-none scrollbar-thin"
+            rows={1}
+          />
+
+          {/* Toolbar */}
+          <div className="flex items-center justify-between px-3 pb-3 pt-1">
+            <div className="flex items-center gap-2">
               
-              <button
+              <button 
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-                className="p-3 rounded-xl border border-slate-600/50 hover:border-sky-500/50 hover:bg-slate-800/50 transition disabled:opacity-50"
-                title="Upload image"
+                className="p-2 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded-xl transition-colors relative group"
+                title="Upload Image or PDF"
               >
-                <FiImage className="text-xl" />
+                <FiPaperclip size={20} />
               </button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileSelect} 
+                className="hidden" 
+                accept="image/*,application/pdf" 
+              />
+
+              <div className="h-6 w-px bg-slate-700 mx-1"></div>
               
               <button
-                onClick={startWebcam}
-                disabled={isLoading}
-                className="p-3 rounded-xl border border-slate-600/50 hover:border-emerald-500/50 hover:bg-slate-800/50 transition disabled:opacity-50"
-                title="Use camera"
+                onClick={() => setAnimateMode(!animateMode)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                  animateMode
+                    ? "bg-indigo-500/10 text-indigo-300 border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
+                    : "bg-slate-800/50 text-slate-500 border-slate-700 hover:bg-slate-800 hover:text-slate-300"
+                }`}
               >
-                <FiCamera className="text-xl" />
+                <FiVideo size={14} className={animateMode ? "animate-pulse" : ""} />
+                {animateMode ? "ANIMATION MODE" : "Text Mode"}
               </button>
-              
-              <textarea
-                ref={inputRef}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Describe your equation or drop an image..."
-                disabled={isLoading}
-                rows={1}
-                className="flex-1 bg-slate-800/30 border border-slate-700/40 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500/50 focus:ring-2 focus:ring-sky-500/20 transition resize-none disabled:opacity-50"
-              />
-              
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleSendText}
-                disabled={!inputText.trim() || isLoading}
-                className="p-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-400 hover:to-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                <FiSend className="text-xl" />
-              </motion.button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+            </div>
+
+            <button
+              onClick={handleSubmit}
+              disabled={(!inputText.trim() && !selectedFile) || isLoading}
+              className={`p-2.5 rounded-xl transition-all shadow-lg ${
+                (!inputText.trim() && !selectedFile) || isLoading
+                  ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                  : "bg-gradient-to-br from-sky-500 to-blue-600 text-white hover:shadow-sky-500/25 hover:scale-105 active:scale-95"
+              }`}
+            >
+              <FiSend size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="text-center mt-3">
+          <p className="text-[10px] text-slate-600 uppercase tracking-widest font-semibold">
+            Powered by Google Gemini 2.5 Flash Lite
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
 
-// Empty state with quick actions
-const EmptyState = () => {
-  const examples = [
-    { icon: "∫", label: "Integrate x² dx", type: "calculus" },
-    { icon: "Σ", label: "Sequence and series", type: "algebra" },
-    { icon: "∂", label: "Partial derivatives", type: "calculus" },
-    { icon: "∞", label: "Limits", type: "analysis" },
-  ];
+// --- Sub-component: Message Bubble with Markdown ---
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center h-full min-h-[400px] text-center px-4"
-    >
-      <motion.div
-        animate={{ rotate: [0, 5, -5, 0] }}
-        transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-        className="text-7xl mb-6 font-bold bg-gradient-to-br from-sky-300 via-cyan-300 to-emerald-300 bg-clip-text text-transparent"
-      >
-        ∫ Σ ∞
-      </motion.div>
-      
-      <h2 className="text-3xl font-bold text-slate-100 mb-3">
-        Math in Motion
-      </h2>
-      <p className="text-slate-400 max-w-md mb-8">
-        Upload equations, capture problems, or type questions—watch them come alive through beautiful animations
-      </p>
-
-      <div className="grid grid-cols-2 gap-3 w-full max-w-md">
-        {examples.map((example, i) => (
-          <motion.button
-            key={i}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            whileHover={{ scale: 1.05, y: -2 }}
-            className="p-4 rounded-2xl border border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/60 hover:border-sky-500/50 transition-all text-left group"
-          >
-            <div className="text-3xl mb-2 group-hover:scale-110 transition-transform">{example.icon}</div>
-            <div className="text-sm font-medium text-slate-200">{example.label}</div>
-            <div className="text-xs text-slate-500 mt-1">{example.type}</div>
-          </motion.button>
-        ))}
-      </div>
-    </motion.div>
-  );
-};
-
-// Improved message bubble with actions
-const MessageBubble = ({ message, onRetry }) => {
+const MessageBubble = ({ message }) => {
   const isUser = message.role === "user";
+  
+  // Handle attachments in the bubble
+  const hasImage = message.image; // Assuming base64 or url
+  // If we passed previewData in the message object for user messages:
+  const isPdf = message.previewData?.type === 'pdf' || (message.file && message.file.type === 'application/pdf'); 
+  const fileName = message.previewData?.name || "Document.pdf";
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 20 }}
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
     >
-      <div
-        className={`max-w-[85%] rounded-2xl p-4 ${
-          isUser
-            ? "bg-gradient-to-br from-sky-500 to-cyan-500 text-slate-950"
-            : "bg-slate-800/60 border border-slate-700/50 text-slate-100 backdrop-blur-sm"
-        }`}
-      >
-        {!isUser && (
-          <div className="flex items-center gap-2 mb-2 text-xs text-sky-300 font-medium">
-            <span>🤖</span>
-            <span>AI Tutor</span>
-          </div>
-        )}
+      <div className={`flex max-w-[90%] md:max-w-[80%] gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+        
+        {/* Avatar */}
+        <div className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center shadow-lg ${
+          isUser 
+            ? "bg-gradient-to-br from-indigo-500 to-purple-600" 
+            : "bg-gradient-to-br from-emerald-500 to-teal-600"
+        }`}>
+          {isUser ? <FiUser className="text-white text-sm" /> : <FiCpu className="text-white text-sm" />}
+        </div>
 
-        {message.image && (
-          <img
-            src={message.image}
-            alt="Uploaded"
-            className="mb-3 rounded-xl max-w-xs"
-          />
-        )}
-
-        {message.text && (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {message.text}
-          </p>
-        )}
-
-        {message.mathText && (
-          <div className="mt-3 p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
-            <div className="text-xs text-sky-300 font-medium mb-1">Extracted:</div>
-            <div className="text-sm font-mono">{message.mathText}</div>
-          </div>
-        )}
-
-        {message.videoUrl && <VideoPlayer videoUrl={message.videoUrl} />}
-
-        {message.error && (
-          <div className="mt-3 p-3 rounded-xl bg-rose-900/30 border border-rose-500/30">
-            <div className="flex items-start gap-2">
-              <span className="text-rose-400">⚠️</span>
-              <div className="flex-1">
-                <div className="text-xs text-rose-300 font-medium mb-1">Error:</div>
-                <div className="text-xs text-rose-200/80">{message.error}</div>
+        {/* Content Box */}
+        <div className={`flex flex-col gap-2 ${isUser ? "items-end" : "items-start"}`}>
+          <div className={`rounded-2xl px-5 py-3.5 shadow-md overflow-hidden ${
+            isUser 
+              ? "bg-indigo-600/90 text-white rounded-tr-none" 
+              : "bg-slate-800 border border-slate-700/50 text-slate-100 rounded-tl-none"
+          }`}>
+            
+            {/* 1. Attachment Display in Bubble */}
+            {hasImage && (
+              <div className="mb-3 -mx-2 -mt-2">
+                <img src={message.image} alt="User upload" className="rounded-lg max-h-64 border border-white/10" />
               </div>
-              <button
-                onClick={() => onRetry(message)}
-                className="p-1.5 rounded-lg hover:bg-rose-800/30 transition"
-                title="Retry"
-              >
-                <FiRefreshCw className="text-sm" />
-              </button>
+            )}
+            
+            {/* PDF Indicator in Bubble */}
+            {isPdf && (
+               <div className={`mb-3 flex items-center gap-3 p-3 rounded-lg ${isUser ? "bg-indigo-700/50" : "bg-slate-900/50"} border border-white/10`}>
+                 <div className="bg-rose-500/20 p-2 rounded text-rose-300">
+                   <FiFileText size={24} />
+                 </div>
+                 <div className="flex flex-col">
+                   <span className="text-sm font-semibold opacity-90">PDF Document</span>
+                   <span className="text-xs opacity-70 truncate max-w-[150px]">{fileName}</span>
+                 </div>
+               </div>
+            )}
+
+            {/* 2. Text Content with MARKDOWN & MATH */}
+            <div className={`prose prose-invert max-w-none text-sm leading-relaxed ${isUser ? "prose-p:text-white" : "prose-p:text-slate-200"}`}>
+              {message.text ? (
+                <ReactMarkdown 
+                  remarkPlugins={[remarkMath]} 
+                  rehypePlugins={[rehypeKatex]}
+                  components={{
+                    // Custom rendering for code blocks if needed
+                    code({node, inline, className, children, ...props}) {
+                      return !inline ? (
+                        <code className="block bg-slate-950/50 p-3 rounded-lg text-xs font-mono my-2 border border-white/10" {...props}>
+                          {children}
+                        </code>
+                      ) : (
+                        <code className="bg-white/10 px-1 py-0.5 rounded text-xs font-mono" {...props}>
+                          {children}
+                        </code>
+                      )
+                    }
+                  }}
+                >
+                  {message.text}
+                </ReactMarkdown>
+              ) : (
+                /* Fallback if just an image was sent */
+                !hasImage && !isPdf && <span className="italic opacity-50">Sent an attachment</span>
+              )}
             </div>
           </div>
-        )}
-      </div>
-    </motion.div>
-  );
-};
 
-// Animated loading indicator
-const LoadingMessage = () => {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex justify-start"
-    >
-      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-            className="text-sky-400"
-          >
-            ⚡
-          </motion.div>
-          <div className="flex gap-1">
-            {[0, 1, 2].map((i) => (
-              <motion.div
-                key={i}
-                animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
-                transition={{
-                  repeat: Infinity,
-                  duration: 1,
-                  delay: i * 0.15,
-                }}
-                className="w-2 h-2 rounded-full bg-sky-400"
-              />
-            ))}
-          </div>
-          <span className="text-xs text-slate-400">Thinking...</span>
+          {/* 3. Assistant Assets (Video/Code) */}
+          {!isUser && (
+            <div className="w-full space-y-3 mt-1">
+              {message.videoUrl && (
+                <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700 shadow-2xl bg-black">
+                  <VideoPlayer videoUrl={message.videoUrl} />
+                </div>
+              )}
+              {message.code && (
+                <div className="w-full max-w-2xl">
+                  <CodeViewer code={message.code} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

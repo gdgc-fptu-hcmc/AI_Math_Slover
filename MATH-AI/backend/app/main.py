@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.staticfiles import StaticFiles
+from app.routers import animation, image, chat  # Import new chat router
 # Load environment variables
 load_dotenv()
 
@@ -47,7 +48,7 @@ if media_dir.exists():
 # Include routers
 app.include_router(image.router, prefix="/api/image", tags=["image"])
 app.include_router(animation.router, prefix="/api/animation", tags=["animation"])
-
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"]) # NEW
 
 # WebSocket connection manager
 class ConnectionManager:
