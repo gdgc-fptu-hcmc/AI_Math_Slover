@@ -366,35 +366,29 @@ async def cleanup_temp_files(max_age_hours: int = 24):
 
 @router.post("/chat")
 async def smart_chat(
-    
     file: Optional[UploadFile] = File(None),
     text: Optional[str] = Form(None),
     mode: Optional[str] = Form("auto"),
 ):
-    """
-    Smart chat endpoint that automatically chooses the best response mode
-
-    Args:
-        file: Optional image file with math content
-        text: Optional text input
-        mode: Response mode - "auto", "explain", "answer", "animate", or "chat"
-
-    Returns:
-        Response based on detected intent or specified mode
-    """
+    """Smart chat endpoint"""
+    
     print("\n🔵 /chat ENDPOINT CALLED")
     print(f"   text: {text}, mode: {mode}")
+    
     try:
+        print("📌 Step 1: Extract math content")
         math_text = ""
         is_image_input = False
 
         # Extract math content from image if provided
         if file:
+            print("📌 Step 1a: Processing file")
             is_image_input = True
             image_content = await file.read()
             vision_result = vision_service.detect_math_content(image_content)
 
             if not vision_result["success"]:
+                print(f"❌ Vision failed: {vision_result.get('message')}")
                 raise HTTPException(
                     status_code=500,
                     detail=vision_result.get("message", "Failed to extract text"),
@@ -404,6 +398,7 @@ async def smart_chat(
             has_math = vision_result.get("has_math", False)
 
             if not has_math:
+                print("❌ No math detected in image")
                 return JSONResponse(
                     content={
                         "success": False,
@@ -413,55 +408,48 @@ async def smart_chat(
                     status_code=400,
                 )
         elif text:
+            print(f"📌 Step 1b: Using text input: {text[:100]}...")
             math_text = text
         else:
+            print("❌ No file or text provided")
             raise HTTPException(
                 status_code=400, detail="Either file or text must be provided"
             )
 
+        print(f"📌 Math text extracted: {math_text[:100]}...")
+
         # Classify input if mode is auto
+        print(f"📌 Step 2: Determine mode (current mode: {mode})")
+        
         if mode == "auto":
-            classification = ai_service.classify_input(math_text)
-            detected_mode = classification.get("suggested_action", "chat")
-            is_math = classification.get("is_math", False)
-            content_type = classification.get("content_type", "unclear")
-
-            # If not math content and not from image, handle as chat
-            if not is_math and not is_image_input:
-                chat_result = ai_service.chat_response(math_text)
-                if not chat_result["success"]:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=chat_result.get(
-                            "message", "Failed to generate response"
-                        ),
-                    )
-
-                return JSONResponse(
-                    content={
-                        "success": True,
-                        "type": "chat",
-                        "content": chat_result["response"],
-                        "classification": {
-                            "is_math": is_math,
-                            "content_type": content_type,
-                            "confidence": classification.get("confidence", 0.0),
-                        },
-                        "message": "Chat response generated successfully",
-                    }
-                )
+            print("📌 Step 2a: Classifying input")
+            try:
+                classification = ai_service.classify_input(math_text)
+                print(f"📌 Classification result: {classification}")
+                detected_mode = classification.get("suggested_action", "chat")
+                is_math = classification.get("is_math", False)
+                content_type = classification.get("content_type", "unclear")
+                print(f"📌 Detected mode: {detected_mode}, is_math: {is_math}")
+            except Exception as e:
+                print(f"❌ Classification failed: {e}")
+                import traceback
+                traceback.print_exc()
+                raise
         else:
+            print(f"📌 Step 2b: Using explicit mode: {mode}")
             detected_mode = mode
 
-        # Handle chat mode explicitly
+        print(f"📌 Final detected_mode: {detected_mode}")
+
+        # Handle different modes
         if detected_mode == "chat":
+            print("📌 Step 3: Processing as CHAT")
             chat_result = ai_service.chat_response(math_text)
             if not chat_result["success"]:
                 raise HTTPException(
                     status_code=500,
                     detail=chat_result.get("message", "Failed to generate response"),
                 )
-
             return JSONResponse(
                 content={
                     "success": True,
@@ -471,17 +459,14 @@ async def smart_chat(
                 }
             )
 
-        # Process math content based on mode
-        if detected_mode == "explain":
-            # Explain mode - detailed explanation
+        elif detected_mode == "explain":
+            print("📌 Step 3: Processing as EXPLAIN")
             result = ai_service.explain_math(math_text)
-
             if not result["success"]:
                 raise HTTPException(
                     status_code=500,
                     detail=result.get("message", "Failed to generate explanation"),
                 )
-
             return JSONResponse(
                 content={
                     "success": True,
@@ -493,15 +478,13 @@ async def smart_chat(
             )
 
         elif detected_mode == "answer":
-            # Answer mode - quick solution
+            print("📌 Step 3: Processing as ANSWER")
             result = ai_service.quick_answer(math_text)
-
             if not result["success"]:
                 raise HTTPException(
                     status_code=500,
                     detail=result.get("message", "Failed to generate answer"),
                 )
-
             return JSONResponse(
                 content={
                     "success": True,
@@ -513,24 +496,30 @@ async def smart_chat(
             )
 
         elif detected_mode == "animate":
-            # Animate mode - full animation pipeline
+            print("📌 Step 3: Processing as ANIMATE")
+            
             # Generate code
+            print("📌 Step 3a: Calling generate_manim_code")
             ai_result = ai_service.generate_manim_code(math_text)
 
             if not ai_result["success"]:
+                print(f"❌ Code generation failed: {ai_result.get('message')}")
                 raise HTTPException(
                     status_code=500,
                     detail=ai_result.get("message", "Failed to generate code"),
                 )
 
+            print(f"✅ Code generated: {len(ai_result['code'])} chars")
+
             # Render animation
+            print("📌 Step 3b: Calling render_animation")
             session_id = str(uuid.uuid4())
             render_result = manim_service.render_animation(
                 ai_result["code"], "MathAnimation", session_id
             )
 
             if not render_result["success"]:
-                # Return code even if rendering fails
+                print(f"❌ Rendering failed: {render_result.get('error')}")
                 return JSONResponse(
                     content={
                         "success": False,
@@ -543,6 +532,8 @@ async def smart_chat(
                     status_code=500,
                 )
 
+            print(f"✅ Rendering succeeded: {render_result.get('video_url')}")
+            
             return JSONResponse(
                 content={
                     "success": True,
@@ -556,16 +547,19 @@ async def smart_chat(
             )
 
         else:
+            print(f"❌ Invalid mode: {detected_mode}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid mode: {mode}. Use 'auto', 'explain', 'answer', or 'animate'",
+                detail=f"Invalid mode: {mode}",
             )
 
     except HTTPException:
         raise
     except Exception as e:
-        error_trace = traceback.format_exc()
-        print(f"ERROR in smart chat: {error_trace}")
+        print(f"\n❌❌❌ EXCEPTION IN /chat:")
+        import traceback
+        traceback.print_exc()
+        print("❌❌❌\n")
         raise HTTPException(
             status_code=500, detail=f"Error processing request: {str(e)}"
         )

@@ -30,239 +30,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-def render_animation(
-    self,
-    manim_code: str,
-    scene_name: str = "MathAnimation",
-    session_id: Optional[str] = None,
-) -> dict:
-    """Render Manim animation - DIAGNOSTIC VERSION"""
-    print("\n🟢 render_animation CALLED")
-    print("\n" + "="*80)
-    print("🎬 RENDER_ANIMATION CALLED")
-    print("="*80)
-    
-    try:
-        # Step 1: Setup
-        print("📋 Step 1: Setup")
-        if not session_id:
-            session_id = str(uuid.uuid4())
-        print(f"   Session ID: {session_id}")
 
-        script_filename = f"scene_{session_id}.py"
-        script_path = self.temp_dir / script_filename
-        abs_script_path = Path(script_path).resolve()
-        
-        print(f"   Script will be at: {abs_script_path}")
-        print(f"   Temp dir: {self.temp_dir}")
-
-        # Step 2: Sanitize code
-        print("\n📋 Step 2: Sanitize code")
-        try:
-            processed_code = self._sanitize_manim_code(manim_code)
-            print(f"   Original code length: {len(manim_code)} chars")
-            print(f"   Processed code length: {len(processed_code)} chars")
-            print(f"   First 200 chars: {processed_code[:200]}")
-        except Exception as e:
-            print(f"   ❌ Sanitize failed: {e}")
-            return {
-                "success": False,
-                "error": f"Code sanitization failed: {str(e)}",
-            }
-
-        # Step 3: Write file
-        print("\n📋 Step 3: Write script file")
-        try:
-            self.temp_dir.mkdir(parents=True, exist_ok=True)
-            print(f"   Temp dir exists: {self.temp_dir.exists()}")
-            
-            with open(abs_script_path, "w", encoding="utf-8") as f:
-                f.write(processed_code)
-            
-            print(f"   ✅ File written")
-            print(f"   File exists: {abs_script_path.exists()}")
-            print(f"   File size: {abs_script_path.stat().st_size} bytes")
-        except Exception as e:
-            print(f"   ❌ Write failed: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to write script: {str(e)}",
-            }
-
-        # Step 4: Build command
-        print("\n📋 Step 4: Build Manim command")
-        try:
-            backend_dir = Path(__file__).parent.parent.parent
-            print(f"   Backend dir: {backend_dir}")
-            print(f"   Backend dir exists: {backend_dir.exists()}")
-            
-            cmd = [
-                sys.executable,
-                "-m",
-                "manim",
-                str(abs_script_path),
-                scene_name,
-                "-pql",
-            ]
-            
-            print(f"   Command: {' '.join(cmd)}")
-            print(f"   Python executable: {sys.executable}")
-            print(f"   Working directory: {backend_dir}")
-        except Exception as e:
-            print(f"   ❌ Command build failed: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to build command: {str(e)}",
-            }
-
-        # Step 5: Run Manim
-        print("\n📋 Step 5: Run Manim subprocess")
-        print("   ⏳ This may take 30-60 seconds...")
-        
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300,
-                cwd=str(backend_dir),
-                shell=(sys.platform == "Windows"),
-            )
-            
-            print(f"\n   ✅ Subprocess completed")
-            print(f"   Return code: {result.returncode}")
-            print(f"   STDOUT length: {len(result.stdout)} chars")
-            print(f"   STDERR length: {len(result.stderr)} chars")
-            
-            if result.returncode != 0:
-                print(f"\n   ❌ MANIM FAILED (non-zero return code)")
-                print(f"\n   Last 500 chars of STDOUT:")
-                print(result.stdout[-500:] if len(result.stdout) > 500 else result.stdout)
-                print(f"\n   Last 500 chars of STDERR:")
-                print(result.stderr[-500:] if len(result.stderr) > 500 else result.stderr)
-                
-                return {
-                    "success": False,
-                    "error": result.stderr or result.stdout,
-                    "message": "Manim rendering failed",
-                }
-            
-            print(f"   ✅ Manim succeeded!")
-            
-        except subprocess.TimeoutExpired as e:
-            print(f"   ❌ TIMEOUT after 5 minutes")
-            return {
-                "success": False,
-                "error": "Timeout",
-                "message": "Rendering took too long",
-            }
-        except Exception as e:
-            print(f"   ❌ Subprocess exception: {e}")
-            import traceback
-            traceback.print_exc()
-            return {
-                "success": False,
-                "error": str(e),
-                "message": f"Subprocess failed: {str(e)}",
-            }
-
-        # Step 6: Find video
-        print("\n📋 Step 6: Find output video")
-        
-        search_locations = [
-            backend_dir / "media" / "videos",
-            self.temp_dir / "media" / "videos",
-        ]
-        
-        video_path = None
-        for i, location in enumerate(search_locations, 1):
-            print(f"\n   Search location {i}: {location}")
-            print(f"   Exists: {location.exists()}")
-            
-            if location.exists():
-                video_files = list(location.rglob("*.mp4"))
-                print(f"   Found {len(video_files)} mp4 files")
-                
-                if video_files:
-                    # Show all found videos
-                    for vf in video_files[:5]:  # Show first 5
-                        print(f"      - {vf.name} ({vf.stat().st_mtime})")
-                    
-                    # Get most recent
-                    video_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                    video_path = video_files[0]
-                    print(f"   ✅ Using most recent: {video_path}")
-                    break
-
-        if not video_path:
-            print(f"\n   ❌ NO VIDEO FOUND")
-            print(f"   Searched in:")
-            for loc in search_locations:
-                print(f"      - {loc}")
-            
-            return {
-                "success": False,
-                "error": "Video file not found after rendering",
-                "message": "Manim completed but video not found",
-                "stdout": result.stdout[-1000:] if hasattr(result, 'stdout') else "N/A",
-            }
-
-        # Step 7: Copy to serving location
-        print("\n📋 Step 7: Copy video to serving location")
-        
-        try:
-            videos_dir = self.temp_dir / "videos"
-            videos_dir.mkdir(exist_ok=True)
-            print(f"   Serving dir: {videos_dir}")
-            print(f"   Serving dir exists: {videos_dir.exists()}")
-            
-            final_path = videos_dir / f"animation_{session_id}.mp4"
-            print(f"   Final path: {final_path}")
-            
-            import shutil
-            shutil.copy2(video_path, final_path)
-            
-            print(f"   ✅ Copied successfully")
-            print(f"   Final file exists: {final_path.exists()}")
-            print(f"   Final file size: {final_path.stat().st_size} bytes")
-            
-        except Exception as e:
-            print(f"   ❌ Copy failed: {e}")
-            return {
-                "success": False,
-                "error": f"Failed to copy video: {str(e)}",
-            }
-
-        # Step 8: Return success
-        video_url = f"/videos/animation_{session_id}.mp4"
-        
-        print("\n" + "="*80)
-        print("✅ SUCCESS!")
-        print(f"   Video URL: {video_url}")
-        print(f"   Video path: {final_path}")
-        print("="*80 + "\n")
-        
-        return {
-            "success": True,
-            "video_path": str(final_path),
-            "video_url": video_url,
-            "session_id": session_id,
-            "message": "Animation rendered successfully",
-        }
-
-    except Exception as e:
-        print("\n" + "="*80)
-        print("❌ UNCAUGHT EXCEPTION")
-        print("="*80)
-        import traceback
-        traceback.print_exc()
-        print("="*80 + "\n")
-        
-        return {
-            "success": False,
-            "error": str(e),
-            "message": f"Unexpected error: {str(e)}",
-        }
 
 class ManimService:
     """Service for rendering Manim animations"""
@@ -286,107 +54,124 @@ class ManimService:
         scene_name: str = "MathAnimation",
         session_id: Optional[str] = None,
     ) -> dict:
-        """
-        Render Manim animation from code
-
-        Args:
-            manim_code: Python code containing Manim scene
-            scene_name: Name of the scene class to render
-            session_id: Optional session ID for file naming
-
-        Returns:
-            dict with render results and video path
-        """
         try:
-            # Generate unique filename
             if not session_id:
                 session_id = str(uuid.uuid4())
 
             script_filename = f"scene_{session_id}.py"
             script_path = self.temp_dir / script_filename
+            abs_script_path = Path(script_path).resolve()
 
-            # Get absolute paths
-            abs_script_path = script_path.resolve()
-            abs_temp_dir = self.temp_dir.resolve()
-
-            # Sanitize code before writing to disk to guard against common runtime issues
+            # Sanitize and write code
             processed_code = self._sanitize_manim_code(manim_code)
-
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+            
             with open(abs_script_path, "w", encoding="utf-8") as f:
                 f.write(processed_code)
 
-            # Prepare render command
-            quality_flags = self.quality_settings.get(self.quality, ["-m"])
-
-            output_filename = f"animation_{session_id}.mp4"
-
-            # Use manim command with absolute paths
+            backend_dir = Path(__file__).parent.parent.parent
+            
+            # ═══════════════════════════════════════════════════════════════
+            # FIX: Correct command for Manim Community v0.19.0
+            # ═══════════════════════════════════════════════════════════════
+            
+            # OLD (WRONG):
+            # cmd = [sys.executable, "-m", "manim", str(abs_script_path), scene_name, "-pql"]
+            
+            # NEW (CORRECT for v0.19.0):
             cmd = [
+                sys.executable,
+                "-m",
                 "manim",
+                "render",  # ← ADD THIS!
                 str(abs_script_path),
                 scene_name,
-                "--media_dir",
-                str(abs_temp_dir),
-                "-o",
-                output_filename,
+                "--format", "mp4",
+                "--media_dir", str(backend_dir / "media"),
+                "-ql",  # ← Quality low (not -pql, not -m)
             ]
-            cmd += [str(flag) for flag in quality_flags]
+            
+            # ═══════════════════════════════════════════════════════════════
 
-            # Run manim from backend directory to avoid path issues
-            backend_dir = Path(__file__).parent.parent.parent
+            print(f"\n{'='*70}")
+            print(f"🎬 Running Manim")
+            print(f"Command: {' '.join(cmd)}")
+            print(f"{'='*70}")
+            
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5 minute timeout
+                timeout=300,
                 cwd=str(backend_dir),
+                shell=(sys.platform == "Windows"),
             )
 
-            # Check for errors
             if result.returncode != 0:
-                error_msg = result.stderr or result.stdout
+                print(f"❌ Manim failed!")
+                print(f"STDERR: {result.stderr}")
+                print(f"STDOUT: {result.stdout}")
                 return {
                     "success": False,
-                    "error": error_msg,
-                    "message": f"Manim rendering failed: {error_msg}",
-                    "script_path": str(script_path),
+                    "error": result.stderr or result.stdout,
+                    "message": "Manim rendering failed",
                 }
 
-            # Find the output video
-            video_path = self._find_output_video(session_id)
+            print(f"✅ Manim completed successfully!")
+
+            # Find video
+            video_path = None
+            search_locations = [
+                backend_dir / "media" / "videos",
+                self.temp_dir / "media" / "videos",
+            ]
+            
+            for location in search_locations:
+                if location.exists():
+                    video_files = list(location.rglob("*.mp4"))
+                    if video_files:
+                        video_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                        video_path = video_files[0]
+                        print(f"📹 Found video at: {video_path}")
+                        break
 
             if not video_path:
+                print(f"❌ No video found!")
                 return {
                     "success": False,
-                    "error": "Video file not found after rendering",
-                    "message": "Rendering completed but video file not found",
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
+                    "error": "Video file not found",
+                    "message": "Rendering completed but video not found",
                 }
 
-            video_url = f"/videos/{video_path.name}"
+            # Copy to serving location
+            videos_dir = self.temp_dir / "videos"
+            videos_dir.mkdir(exist_ok=True)
+            final_path = videos_dir / f"animation_{session_id}.mp4"
+            
+            import shutil
+            shutil.copy2(video_path, final_path)
+            
+            print(f"📋 Copied to: {final_path}")
+            print(f"🌐 URL: /videos/animation_{session_id}.mp4")
+            print(f"{'='*70}\n")
 
             return {
                 "success": True,
-                "video_path": str(video_path),
-                "video_url": video_url,
+                "video_path": str(final_path),
+                "video_url": f"/videos/animation_{session_id}.mp4",
                 "session_id": session_id,
-                "script_path": str(script_path),
                 "message": "Animation rendered successfully",
             }
 
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": "Rendering timeout (exceeded 5 minutes)",
-                "message": "Animation rendering took too long",
-            }
-
         except Exception as e:
+            import traceback
+            print(f"\n❌ Exception:")
+            traceback.print_exc()
+            
             return {
                 "success": False,
                 "error": str(e),
-                "message": f"Error rendering animation: {str(e)}",
+                "message": f"Error: {str(e)}",
             }
 
     def _sanitize_manim_code(self, code: str) -> str:
